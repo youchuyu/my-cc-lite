@@ -1,85 +1,140 @@
 # my-cc-lite State Contract
 
-The source of truth is the project-local `.my-cc-lite/` directory.
+The source of truth is the project-local `.my-cc-lite/` directory, with workflow state scoped to a single task.
 
-## `state.json`
+## Layout
 
-Required top-level fields:
+```text
+.my-cc-lite/
+  current-task.json
+  capabilities.json
+  config.json
+  tasks/
+    <taskId>/
+      workflow.json
+      plan.md
+      events.jsonl
+      session-summary.md
+      artifacts/
+```
+
+`current-task.json` is only a pointer:
 
 ```json
 {
   "version": 1,
-  "runId": "20260531T120000Z-task-id",
-  "task": "Task summary",
-  "phase": "executing",
+  "currentTaskId": "20260531T120000Z-add-login-a1b2c3d4",
+  "updatedAt": "2026-05-31T12:05:00.000Z"
+}
+```
+
+Only `/plan` creates task directories. `/do`, `/verify`, and `/status` operate on the current task or an explicit `--task <taskId>`.
+
+## `workflow.json`
+
+Each task owns one workflow source of truth:
+
+```json
+{
+  "version": 1,
+  "taskId": "20260531T120000Z-add-login-a1b2c3d4",
+  "task": "Add login",
+  "currentStage": "do",
   "strictness": "soft",
   "createdAt": "2026-05-31T12:00:00.000Z",
-  "updatedAt": "2026-05-31T12:15:00.000Z",
-  "plan": {
-    "path": ".my-cc-lite/plan.md",
-    "accepted": true,
-    "updatedAt": "2026-05-31T12:05:00.000Z"
+  "updatedAt": "2026-05-31T12:05:00.000Z",
+  "stages": {
+    "plan": {},
+    "do": {},
+    "verify": {},
+    "status": {}
   },
-  "items": [],
+  "workItems": [],
   "changedFiles": [],
-  "verification": {
-    "required": true,
-    "status": "not_started",
-    "evidence": []
-  },
   "blockers": [],
   "extensions": {}
 }
 ```
 
-Allowed phases:
+Required stages are `plan`, `do`, `verify`, and `status`. All stages use the same shape:
 
-| Phase | Meaning |
-| --- | --- |
-| `idle` | No active run |
-| `planning` | Plan is being created or updated |
-| `ready` | Plan exists and execution can start |
-| `executing` | Work items are being implemented |
-| `verifying` | Checks and evidence collection are active |
-| `blocked` | User input or external condition is needed |
-| `done` | Work is complete and verified |
+```json
+{
+  "name": "do",
+  "status": "pending",
+  "startedAt": null,
+  "updatedAt": null,
+  "completedAt": null,
+  "summary": "",
+  "input": {},
+  "output": {},
+  "capabilities": {
+    "items": true,
+    "files": true,
+    "evidence": true,
+    "checks": false,
+    "snapshot": false,
+    "blockers": true
+  },
+  "items": [],
+  "files": [],
+  "evidence": [],
+  "checks": [],
+  "snapshot": null,
+  "blockers": [],
+  "errors": []
+}
+```
 
-Terminal item statuses are `completed`, `skipped`, and `not_applicable`.
+Allowed stage statuses are `pending`, `in_progress`, `completed`, `failed`, and `blocked`.
+
+Terminal work item statuses are `completed`, `skipped`, and `not_applicable`. Verification cannot pass while any work item is non-terminal or while blockers exist.
+
+## CLI Surface
+
+The installed helper remains:
+
+```bash
+MY_CC_LITE_HELPER="$CLAUDE_PLUGIN_ROOT/scripts/my-cc-lite-state.mjs"
+```
+
+Primary commands:
+
+```text
+plan-start <task>
+use-task <taskId>
+current-task
+start-stage <do|verify|status> [--task <taskId>]
+update-stage <plan|do|verify|status> [patch-json] [--task <taskId>]
+complete-stage <plan|do|verify|status> [output-json] [--task <taskId>]
+fail-stage <plan|do|verify|status> [error-json|string] [--task <taskId>]
+set-work-items [items-json] [--task <taskId>]
+set-work-item <id> <status> [evidence...] [--task <taskId>]
+add-changed-file <path> [--task <taskId>]
+add-evidence [evidence-json] [--task <taskId>]
+set-verification <passed|failed|not_started> [--task <taskId>]
+status [--task <taskId>]
+summarize [--task <taskId>]
+```
+
+Stage-specific wrappers exist only where they add useful behavior:
+
+- `scripts/stages/plan.mjs` creates a new task and can initialize `plan.md` plus work items from stdin JSON.
+- `scripts/stages/verify.mjs` starts verification, records optional evidence from stdin JSON, and applies the verification gate.
 
 ## `events.jsonl`
 
-Events are append-only JSON lines.
+Events are append-only JSON lines inside the task directory.
 
 ```json
-{"version":1,"id":"event-001","runId":"run-id","source":"my-cc-lite","type":"item.completed","timestamp":"2026-05-31T12:10:00.000Z","payload":{"itemId":"T1"}}
+{"version":1,"id":"event-001","taskId":"task-id","source":"my-cc-lite","type":"item.completed","timestamp":"2026-05-31T12:10:00.000Z","payload":{"itemId":"T1"}}
 ```
-
-Core event types:
-
-| Event type | Purpose |
-| --- | --- |
-| `run.created` | A run has started |
-| `run.completed` | A run has completed |
-| `plan.created` | A new plan was written |
-| `plan.updated` | Existing plan changed |
-| `item.started` | A work item started |
-| `item.completed` | A work item completed |
-| `item.blocked` | A work item is blocked |
-| `file.changed` | A file changed |
-| `tool.succeeded` | A command/tool succeeded |
-| `tool.failed` | A command/tool failed |
-| `verification.started` | Verification started |
-| `verification.evidence.added` | Evidence was added |
-| `verification.passed` | Verification passed |
-| `verification.failed` | Verification failed |
-| `capability.registered` | A plugin registered a capability |
-| `context.summary.added` | A plugin contributed context |
 
 Malformed event lines must not break the core workflow. Readers should ignore malformed lines and surface a warning.
 
 ## `capabilities.json`
 
-Capability providers are grouped by function.
+Capability providers are project-level and grouped by function.
 
 ```json
 {
@@ -97,29 +152,9 @@ Capability providers are grouped by function.
 }
 ```
 
-Provider types:
-
-| Type | Description |
-| --- | --- |
-| `context` | Adds project, memory, research, or domain context |
-| `diagnostics` | Adds lint, typecheck, LSP, AST, static analysis, or runtime diagnostics |
-| `verification` | Adds tests, browser screenshots, QA checks, or review evidence |
-| `execution` | Adds execution workers or task routing |
-| `status` | Adds display surfaces such as HUD/statusLine |
-
-## Ownership
-
-Core-owned fields:
-
-- `phase`
-- `items`
-- `verification.status`
-- `changedFiles`
-- `blockers`
-
 Companion plugins should write only:
 
-- their namespace under `extensions.<pluginName>`
-- append-only events in `events.jsonl`
-- artifacts under `.my-cc-lite/artifacts/<pluginName>/`
+- their namespace under `workflow.extensions.<pluginName>`
+- append-only task events in `tasks/<taskId>/events.jsonl`
+- artifacts under `tasks/<taskId>/artifacts/<pluginName>/`
 - provider declarations in `capabilities.json`

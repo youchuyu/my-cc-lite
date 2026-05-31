@@ -39,7 +39,7 @@ If your environment does not expose `CLAUDE_PLUGIN_ROOT`, replace it with the ab
 ## Basic Flow
 
 1. Run `/plan "<task>"`.
-2. Review `.my-cc-lite/plan.md`.
+2. Review `.my-cc-lite/tasks/<taskId>/plan.md`.
 3. Run `/do` until required items are complete.
 4. Run `/verify`.
 5. Use `/status` at any point to inspect progress and next action.
@@ -48,13 +48,19 @@ If your environment does not expose `CLAUDE_PLUGIN_ROOT`, replace it with the ab
 
 ```text
 .my-cc-lite/
-  state.json
-  plan.md
-  events.jsonl
-  session-summary.md
+  current-task.json
   capabilities.json
-  artifacts/
+  config.json
+  tasks/
+    <taskId>/
+      workflow.json
+      plan.md
+      events.jsonl
+      session-summary.md
+      artifacts/
 ```
+
+Every `/plan` invocation creates a new task directory and updates `current-task.json`. The workflow source of truth is the task-local `workflow.json`.
 
 ## Development
 
@@ -72,4 +78,4 @@ The smoke test creates a temporary target project and runs the helper from the p
 
 - `docs/ARCHITECTURE.md` explains the core boundaries.
 - `docs/STATE-CONTRACT.md` defines `.my-cc-lite/` state and event files.
-- `docs/PLUGIN-COMPAT.md` defines companion-plugin integration points.
+- `docs/PLUGIN-INTEGRATION.md` defines companion-plugin integration points.

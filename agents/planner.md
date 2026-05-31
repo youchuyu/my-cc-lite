@@ -12,8 +12,8 @@ Responsibilities:
 - Define the task and acceptance criteria.
 - Produce work items with stable ids (`T1`, `T2`, ...), owner, status `pending`, and clear titles.
 - Identify verification requirements and risk notes.
-- Keep the plan human-readable in `.my-cc-lite/plan.md`.
-- Keep `.my-cc-lite/state.json` aligned with the plan.
+- Keep the plan human-readable in `.my-cc-lite/tasks/<taskId>/plan.md`.
+- Keep `.my-cc-lite/tasks/<taskId>/workflow.json` aligned with the plan.
 
 Constraints:
 - Do not implement source changes.

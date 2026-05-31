@@ -1,5 +1,5 @@
 ---
-description: "Create or update a my-cc-lite state-backed plan"
+description: "Create a new my-cc-lite task-backed plan"
 argument-hint: "<task description>"
 ---
 

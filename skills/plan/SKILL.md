@@ -1,12 +1,12 @@
 ---
 name: plan
-description: Create or update a my-cc-lite state-backed plan
+description: Create a my-cc-lite task-backed plan
 argument-hint: "<task description>"
 ---
 
 # my-cc-lite /plan
 
-Use this skill to initialize a run, produce `.my-cc-lite/plan.md`, and populate `.my-cc-lite/state.json`.
+Use this skill to initialize a task, produce `.my-cc-lite/tasks/<taskId>/plan.md`, and populate `.my-cc-lite/tasks/<taskId>/workflow.json`.
 
 Use the helper from the installed plugin root while keeping the target project as the current working directory:
 
@@ -18,19 +18,17 @@ If `CLAUDE_PLUGIN_ROOT` is unavailable, use the absolute path to the installed p
 
 ## Steps
 
-1. Read `.my-cc-lite/state.json` if present.
-2. If an active run exists and the user did not clearly ask to replace it, continue or update that run.
-3. Explore the codebase only when discovery is needed.
-4. Create concise acceptance criteria and ordered work items with ids `T1`, `T2`, ...
-5. Run `node "$MY_CC_LITE_HELPER" init "<task>"` from the target project when no state exists.
-6. Write `.my-cc-lite/plan.md` with task, acceptance criteria, work items, verification steps, and risks.
-7. Update `.my-cc-lite/state.json` so `phase` is `ready`, `plan.accepted` is true, and `items` match the plan:
+1. Explore the codebase only when discovery is needed.
+2. Create concise acceptance criteria and ordered work items with ids `T1`, `T2`, ...
+3. Run `node "$MY_CC_LITE_HELPER" plan-start "<task>"` from the target project. Every `/plan` call creates a new task and updates `.my-cc-lite/current-task.json`.
+4. Write `.my-cc-lite/tasks/<taskId>/plan.md` with task, acceptance criteria, work items, verification steps, and risks.
+5. Update the task's `workflow.json` so the plan stage is complete and `workItems` match the plan:
 
 ```bash
-node "$MY_CC_LITE_HELPER" set-items '[{"id":"T1","title":"Create plugin manifest","status":"pending","owner":"executor","evidence":[]}]'
+node "$MY_CC_LITE_HELPER" set-work-items '[{"id":"T1","title":"Create plugin manifest","status":"pending","owner":"executor","evidence":[]}]'
 ```
 
-8. Append `plan.created` or `plan.updated` to `.my-cc-lite/events.jsonl` when needed. The `set-items` helper appends `plan.updated` automatically.
+6. The `set-work-items` helper appends `plan.updated` to the task-local `events.jsonl` automatically.
 
 ## State Shape
 
@@ -49,5 +47,5 @@ Each item should look like:
 ## Output
 
 - Short plan summary
-- Current phase
+- Current task id and stage
 - Recommended next command: `/do`

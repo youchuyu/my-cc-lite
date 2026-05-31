@@ -18,24 +18,29 @@ The core keeps state in `.my-cc-lite/` inside the active project. It does not bu
 - Agents: `explore`, `planner`, `executor`, `verifier`
 - Hooks: `UserPromptSubmit`, `PostToolUse`, `PreCompact`, `Stop`
 - State helper: `scripts/my-cc-lite-state.mjs`
-- Contracts: local state, append-only events, optional capability providers
+- Workflow parser: `scripts/my-cc-lite-workflow-parser.mjs`
+- Contracts: task-local workflow state, append-only events, optional capability providers
 
 ## State Files
 
 ```text
 .my-cc-lite/
-  state.json
-  plan.md
-  events.jsonl
-  session-summary.md
+  current-task.json
   capabilities.json
-  artifacts/
+  config.json
+  tasks/
+    <taskId>/
+      workflow.json
+      plan.md
+      events.jsonl
+      session-summary.md
+      artifacts/
 ```
 
 ## Basic Flow
 
 1. Run `/plan "<task>"`.
-2. Review `.my-cc-lite/plan.md`.
+2. Review `.my-cc-lite/tasks/<taskId>/plan.md`.
 3. Run `/do` until required items are complete.
 4. Run `/verify`.
 5. Use `/status` at any point to inspect progress and next action.
@@ -56,7 +61,7 @@ If `CLAUDE_PLUGIN_ROOT` is unavailable, replace it with the absolute path to the
 
 ```bash
 node "$MY_CC_LITE_HELPER" status
-node "$MY_CC_LITE_HELPER" init "Implement a small change"
+node "$MY_CC_LITE_HELPER" plan-start "Implement a small change"
 node "$MY_CC_LITE_HELPER" append-event event.json
 node "$MY_CC_LITE_HELPER" register-capability capability.json
 node "$MY_CC_LITE_HELPER" add-evidence evidence.json
@@ -66,9 +71,9 @@ node "$MY_CC_LITE_HELPER" summarize
 Additional workflow helpers:
 
 ```bash
-node "$MY_CC_LITE_HELPER" set-items '[{"id":"T1","title":"Create manifest","status":"pending"}]'
-node "$MY_CC_LITE_HELPER" set-item T1 in_progress
-node "$MY_CC_LITE_HELPER" set-item T1 completed "npm test passed"
+node "$MY_CC_LITE_HELPER" set-work-items '[{"id":"T1","title":"Create manifest","status":"pending"}]'
+node "$MY_CC_LITE_HELPER" set-work-item T1 in_progress
+node "$MY_CC_LITE_HELPER" set-work-item T1 completed "npm test passed"
 node "$MY_CC_LITE_HELPER" add-changed-file src/file.ts
 node "$MY_CC_LITE_HELPER" set-verification passed
 ```
@@ -78,7 +83,7 @@ node "$MY_CC_LITE_HELPER" set-verification passed
 From a temporary project directory:
 
 ```bash
-node "$MY_CC_LITE_HELPER" init "smoke test"
+node "$MY_CC_LITE_HELPER" plan-start "smoke test"
 node "$MY_CC_LITE_HELPER" status
 node "$MY_CC_LITE_HELPER" add-evidence '{"source":"manual","summary":"state command works","status":"passed"}'
 node "$MY_CC_LITE_HELPER" summarize

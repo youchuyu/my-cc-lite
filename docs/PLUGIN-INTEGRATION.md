@@ -1,4 +1,4 @@
-# my-cc-lite Plugin Compatibility
+# my-cc-lite Plugin Integration
 
 Companion plugins are optional. The core must keep working when none are installed.
 
@@ -6,10 +6,11 @@ Companion plugins are optional. The core must keep working when none are install
 
 Companion plugins may:
 
-- read `.my-cc-lite/state.json`
-- read `.my-cc-lite/plan.md`
-- append events to `.my-cc-lite/events.jsonl`
-- write artifacts under `.my-cc-lite/artifacts/<provider>/`
+- read `.my-cc-lite/current-task.json`
+- read `.my-cc-lite/tasks/<taskId>/workflow.json`
+- read `.my-cc-lite/tasks/<taskId>/plan.md`
+- append events to `.my-cc-lite/tasks/<taskId>/events.jsonl`
+- write artifacts under `.my-cc-lite/tasks/<taskId>/artifacts/<provider>/`
 - register capabilities in `.my-cc-lite/capabilities.json`
 
 They should not mutate core-owned state fields directly.
@@ -53,7 +54,7 @@ Create `evidence.json`:
   "source": "my-cc-lite-browser",
   "summary": "Home page loaded without console errors",
   "status": "passed",
-  "path": ".my-cc-lite/artifacts/browser/home.png"
+  "path": ".my-cc-lite/tasks/<taskId>/artifacts/browser/home.png"
 }
 ```
 
@@ -66,12 +67,12 @@ node "$MY_CC_LITE_HELPER" add-evidence evidence.json
 Alternatively append a raw event:
 
 ```json
-{"version":1,"runId":"run-id","source":"my-cc-lite-browser","type":"verification.evidence.added","timestamp":"2026-05-31T12:20:00.000Z","payload":{"summary":"Home page loaded","status":"passed"}}
+{"version":1,"taskId":"task-id","source":"my-cc-lite-browser","type":"verification.evidence.added","timestamp":"2026-05-31T12:20:00.000Z","payload":{"summary":"Home page loaded","status":"passed"}}
 ```
 
 ## Read-only HUD Example
 
-A HUD plugin should read `state.json` and recent events, then render status. It should usually write nothing. If it needs to record display metadata, write under:
+A HUD plugin should read `current-task.json`, the current task's `workflow.json`, and recent task events, then render status. It should usually write nothing. If it needs to record display metadata, write under `workflow.extensions`:
 
 ```json
 {

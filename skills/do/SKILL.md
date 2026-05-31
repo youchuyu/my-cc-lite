@@ -16,13 +16,13 @@ MY_CC_LITE_HELPER="$CLAUDE_PLUGIN_ROOT/scripts/my-cc-lite-state.mjs"
 
 ## Steps
 
-1. Read `.my-cc-lite/state.json` and `.my-cc-lite/plan.md`.
-2. If state or plan is missing, recommend `/plan` or create a minimal plan only when the user's intent is unambiguous.
+1. Read `.my-cc-lite/current-task.json`, then the task's `workflow.json` and `plan.md`.
+2. If no current task exists, recommend `/plan "<task>"`. `/do` must not create task directories.
 3. Select the requested item id, or the first `pending` item.
 4. Mark it in progress:
 
 ```bash
-node "$MY_CC_LITE_HELPER" set-item T1 in_progress
+node "$MY_CC_LITE_HELPER" set-work-item T1 in_progress
 ```
 
 5. Implement only that item, using the local codebase patterns.
@@ -36,7 +36,7 @@ node "$MY_CC_LITE_HELPER" add-changed-file path/to/file
 8. Mark the item `completed` with evidence, or `blocked` with a clear blocker:
 
 ```bash
-node "$MY_CC_LITE_HELPER" set-item T1 completed "check command or file evidence"
+node "$MY_CC_LITE_HELPER" set-work-item T1 completed "check command or file evidence"
 ```
 
 9. If all required items are terminal, recommend `/verify`.

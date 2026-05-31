@@ -8,7 +8,7 @@
     "my-cc-lite-state": "./scripts/my-cc-lite-state.mjs"
   },
   "scripts": {
-    "check": "node --check scripts/my-cc-lite-state.mjs && node --check hooks/prompt-submit.mjs && node --check hooks/post-tool-use.mjs && node --check hooks/pre-compact.mjs && node --check hooks/stop.mjs && node --check scripts/validate-json.mjs && node --check test/smoke.mjs",
+    "check": "node --check scripts/my-cc-lite-workflow-parser.mjs && node --check scripts/my-cc-lite-state.mjs && node --check scripts/stages/plan.mjs && node --check scripts/stages/verify.mjs && node --check hooks/prompt-submit.mjs && node --check hooks/post-tool-use.mjs && node --check hooks/pre-compact.mjs && node --check hooks/stop.mjs && node --check scripts/validate-json.mjs && node --check test/smoke.mjs",
     "validate:json": "node scripts/validate-json.mjs",
     "smoke": "node test/smoke.mjs"
   },

@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-import { addChangedFile, appendEvent, extractChangedFiles, readState, readStdinJson } from "../scripts/my-cc-lite-state.mjs";
+import { addChangedFile, appendEvent, deriveOverallStatus, extractChangedFiles, readState, readStdinJson } from "../scripts/my-cc-lite-state.mjs";
 
 const input = await readStdinJson();
 const state = await readState().catch(() => null);
-if (!state || state.phase === "done" || state.phase === "idle") process.exit(0);
+if (!state || deriveOverallStatus(state) === "done") process.exit(0);
 
 const files = extractChangedFiles(input);
 for (const file of files) {
@@ -13,7 +13,7 @@ for (const file of files) {
 const toolName = input.tool_name || input.toolName || input.name || input.tool || "unknown";
 const failed = Boolean(input.error || input.failure || input.is_error);
 await appendEvent({
-  runId: state.runId,
+  taskId: state.taskId,
   source: "my-cc-lite-hook",
   type: failed ? "tool.failed" : "tool.succeeded",
   payload: {

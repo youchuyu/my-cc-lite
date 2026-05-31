@@ -16,7 +16,7 @@ MY_CC_LITE_HELPER="$CLAUDE_PLUGIN_ROOT/scripts/my-cc-lite-state.mjs"
 
 ## Steps
 
-1. Read `.my-cc-lite/state.json`, `.my-cc-lite/plan.md`, `.my-cc-lite/events.jsonl`, and `.my-cc-lite/capabilities.json`.
+1. Read `.my-cc-lite/current-task.json`, the task's `workflow.json`, `plan.md`, `events.jsonl`, and `.my-cc-lite/capabilities.json`.
 2. If required items are still pending or in progress, do not pass verification. Recommend `/do`.
 3. Run relevant local checks for the changed files and acceptance criteria.
 4. Add each evidence item:

@@ -24,7 +24,7 @@ The following capabilities are intentionally outside the core:
 - LSP, AST, or language-server diagnostics
 - advanced autonomous loops
 
-These can integrate through `.my-cc-lite/events.jsonl`, `.my-cc-lite/capabilities.json`, and namespaced data under `state.extensions`.
+These can integrate through task-local `events.jsonl`, project-level `.my-cc-lite/capabilities.json`, and namespaced data under `workflow.extensions`.
 
 ## Runtime Model
 
@@ -33,11 +33,14 @@ The plugin code lives in the installed plugin directory. Runtime state lives in 
 ```text
 target-project/
   .my-cc-lite/
-    state.json
-    plan.md
-    events.jsonl
-    session-summary.md
+    current-task.json
     capabilities.json
+    tasks/
+      <taskId>/
+        workflow.json
+        plan.md
+        events.jsonl
+        session-summary.md
 ```
 
 Hooks and skills should call the helper from the plugin root while preserving the target project as the current working directory. This keeps project state inspectable and avoids copying plugin scripts into every target project.
