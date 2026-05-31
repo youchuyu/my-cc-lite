@@ -1,0 +1,34 @@
+{
+  "name": "my-cc-lite",
+  "version": "0.1.0",
+  "description": "Lightweight state-backed orchestration for Claude Code",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "my-cc-lite-state": "./scripts/my-cc-lite-state.mjs"
+  },
+  "scripts": {
+    "check": "node --check scripts/my-cc-lite-state.mjs && node --check hooks/prompt-submit.mjs && node --check hooks/post-tool-use.mjs && node --check hooks/pre-compact.mjs && node --check hooks/stop.mjs && node --check scripts/validate-json.mjs && node --check test/smoke.mjs",
+    "validate:json": "node scripts/validate-json.mjs",
+    "smoke": "node test/smoke.mjs"
+  },
+  "files": [
+    ".claude-plugin/",
+    "agents/",
+    "commands/",
+    "docs/",
+    "hooks/",
+    "scripts/",
+    "skills/",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "claude-code",
+    "plugin",
+    "orchestration",
+    "planning",
+    "verification"
+  ]
+}

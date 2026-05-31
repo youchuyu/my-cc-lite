@@ -1,0 +1,23 @@
+{
+  "name": "my-cc-lite",
+  "version": "0.1.0",
+  "description": "Lightweight state-backed orchestration for Claude Code",
+  "author": {
+    "name": "my-cc-lite contributors"
+  },
+  "license": "MIT",
+  "keywords": [
+    "claude-code",
+    "plugin",
+    "orchestration",
+    "planning",
+    "verification"
+  ],
+  "skills": [
+    "./skills/plan/",
+    "./skills/do/",
+    "./skills/verify/",
+    "./skills/status/"
+  ],
+  "commands": "./commands/"
+}

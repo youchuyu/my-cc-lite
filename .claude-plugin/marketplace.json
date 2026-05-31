@@ -1,0 +1,20 @@
+{
+  "name": "my-cc-lite",
+  "interface": {
+    "displayName": "my-cc-lite"
+  },
+  "plugins": [
+    {
+      "name": "my-cc-lite",
+      "source": {
+        "source": "local",
+        "path": "."
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
