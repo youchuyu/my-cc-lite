@@ -101,6 +101,7 @@ MY_CC_LITE_HELPER="$CLAUDE_PLUGIN_ROOT/scripts/my-cc-lite-state.mjs"
 Primary commands:
 
 ```text
+init-capabilities [capabilities-json]
 plan-start <task>
 use-task <taskId>
 current-task
@@ -134,14 +135,35 @@ Malformed event lines must not break the core workflow. Readers should ignore ma
 
 ## `capabilities.json`
 
-Capability providers are project-level and grouped by function.
+Capabilities are project-level. The `/init` command writes a curated current-session stage capability inventory under `inventory`; companion plugins register external providers under `providers`. The inventory is not a dump of every visible Claude Code tool. It should contain only non-native, non-my-cc-lite skills, agents, and tools that the current my-cc-lite stage can directly use.
 
 ```json
 {
   "version": 1,
+  "initializedAt": "2026-05-31T12:00:00.000Z",
+  "source": {
+    "kind": "current-session-context"
+  },
+  "inventory": {
+    "planning": {
+      "skills": [],
+      "agents": [],
+      "tools": []
+    },
+    "execution": {
+      "skills": [],
+      "agents": [],
+      "tools": []
+    },
+    "review": {
+      "skills": [],
+      "agents": [],
+      "tools": []
+    }
+  },
   "providers": {
-    "verification.browser": {
-      "type": "verification",
+    "review.browser": {
+      "type": "review",
       "plugin": "my-cc-lite-browser",
       "commands": ["/browser-test"],
       "events": ["verification.evidence.added", "verification.failed"],
@@ -151,6 +173,14 @@ Capability providers are project-level and grouped by function.
   }
 }
 ```
+
+Inventory buckets:
+
+- `skills`: skills the current stage can call, or skills that can replace the current stage skill.
+- `agents`: agents the current stage can delegate to for part or all of the stage responsibility.
+- `tools`: other callable abilities that the current stage can directly use, including MCP tools and callable tools exposed by companion plugins.
+
+Each inventory entry must include `name` and `kind`; `description`, `invoke`, `source`, and `confidence` are normalized by the helper when absent. `invoke` defaults to `name`.
 
 Companion plugins should write only:
 

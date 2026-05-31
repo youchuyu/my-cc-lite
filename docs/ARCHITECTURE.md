@@ -5,12 +5,13 @@
 ## Core Responsibilities
 
 - create and maintain a project-local plan
+- initialize a project-level current-session capability inventory
 - track work item status
 - record changed files
 - collect verification evidence
 - summarize active state before context compaction
 - remind the agent when the run is not complete
-- expose state, event, and capability contracts for companion plugins
+- expose state, event, inventory, and provider contracts for companion plugins
 
 ## Non-core Responsibilities
 

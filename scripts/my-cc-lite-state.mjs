@@ -12,6 +12,7 @@ import {
   deriveSnapshot,
   failStage,
   injectionText,
+  initCapabilities,
   nextAction,
   readCurrentTaskPointer,
   readCurrentWorkflow,
@@ -39,6 +40,7 @@ export {
   deriveOverallStatus,
   failStage,
   injectionText,
+  initCapabilities,
   nextAction,
   readEvents,
   registerCapability,
@@ -110,7 +112,7 @@ function normalizeProjectPath(filePath) {
   return relative === "" ? null : relative;
 }
 
-async function cli(argv) {
+export async function cli(argv) {
   const { positional, taskId } = parseArgs(argv.slice(2));
   const command = positional[0] || "status";
 
@@ -229,6 +231,12 @@ async function cli(argv) {
     delete capability.provider;
     delete capability.name;
     process.stdout.write(`${JSON.stringify(await registerCapability(provider, capability), null, 2)}\n`);
+    return;
+  }
+
+  if (command === "init-capabilities") {
+    const capabilities = await readJsonArgument(positional[1]);
+    process.stdout.write(`${JSON.stringify(await initCapabilities(capabilities), null, 2)}\n`);
     return;
   }
 

@@ -13,6 +13,45 @@ const STAGES = ["plan", "do", "verify", "status"];
 const STAGE_STATUSES = new Set(["pending", "in_progress", "completed", "failed", "blocked"]);
 const ITEM_STATUSES = new Set(["pending", "in_progress", "completed", "skipped", "not_applicable", "blocked"]);
 const TERMINAL_ITEM_STATUSES = new Set(["completed", "skipped", "not_applicable"]);
+const INVENTORY_CATEGORIES = ["planning", "execution", "review"];
+const INVENTORY_BUCKETS = ["skills", "agents", "tools"];
+const MY_CC_LITE_CAPABILITY_NAMES = new Set([
+  "init",
+  "plan",
+  "do",
+  "verify",
+  "status",
+  "planner",
+  "executor",
+  "verifier",
+  "explore"
+]);
+const CLAUDE_NATIVE_CAPABILITY_NAMES = new Set([
+  "bash",
+  "bashoutput",
+  "edit",
+  "exitplanmode",
+  "general-purpose",
+  "glob",
+  "grep",
+  "killbash",
+  "listmcpresources",
+  "lsp",
+  "ls",
+  "multiedit",
+  "notebookedit",
+  "notebookread",
+  "plan",
+  "read",
+  "readmcpresource",
+  "run",
+  "task",
+  "todowrite",
+  "verify",
+  "webfetch",
+  "websearch",
+  "write"
+]);
 
 const DEFAULT_STAGE_CAPABILITIES = {
   plan: { items: true, files: false, evidence: false, checks: false, snapshot: false, blockers: true },
@@ -117,6 +156,85 @@ export async function ensureCapabilities() {
   const capabilities = { version: 1, providers: {} };
   await atomicWrite(CAPABILITIES_PATH, `${JSON.stringify(capabilities, null, 2)}\n`);
   return capabilities;
+}
+
+export async function initCapabilities(input) {
+  const inventory = normalizeCapabilityInventory(input?.inventory || input);
+  return withWorkflowLock(async () => {
+    const existing = await readJson(CAPABILITIES_PATH, {});
+    const capabilities = {
+      ...existing,
+      version: 1,
+      initializedAt: now(),
+      source: { ...(input?.source || {}), kind: "current-session-context" },
+      inventory,
+      providers: existing.providers && typeof existing.providers === "object" ? existing.providers : {}
+    };
+    await atomicWrite(CAPABILITIES_PATH, `${JSON.stringify(capabilities, null, 2)}\n`);
+    return capabilities;
+  });
+}
+
+function normalizeCapabilityInventory(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new Error("capability inventory must be an object");
+  }
+  const inventory = {};
+  for (const category of INVENTORY_CATEGORIES) {
+    const categoryInput = input[category];
+    if (!categoryInput || typeof categoryInput !== "object" || Array.isArray(categoryInput)) {
+      throw new Error(`capability inventory.${category} must be an object`);
+    }
+    inventory[category] = {};
+    for (const bucket of INVENTORY_BUCKETS) {
+      const bucketInput = categoryInput[bucket] || [];
+      if (!Array.isArray(bucketInput)) {
+        throw new Error(`capability inventory.${category}.${bucket} must be an array`);
+      }
+      inventory[category][bucket] = bucketInput
+        .map((entry, index) => normalizeCapabilityEntry(entry, `${category}.${bucket}[${index}]`))
+        .filter((entry) => !isExcludedCapability(entry));
+    }
+  }
+  return inventory;
+}
+
+function normalizeCapabilityEntry(entry, pathLabel) {
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+    throw new Error(`capability inventory.${pathLabel} must be an object`);
+  }
+  if (!entry.name || typeof entry.name !== "string") {
+    throw new Error(`capability inventory.${pathLabel}.name is required`);
+  }
+  if (!entry.kind || typeof entry.kind !== "string") {
+    throw new Error(`capability inventory.${pathLabel}.kind is required`);
+  }
+  return {
+    name: entry.name,
+    kind: entry.kind,
+    description: typeof entry.description === "string" ? entry.description : "",
+    invoke: typeof entry.invoke === "string" ? entry.invoke : entry.name,
+    source: typeof entry.source === "string" ? entry.source : "visible-context",
+    confidence: ["high", "medium", "low"].includes(entry.confidence) ? entry.confidence : "medium"
+  };
+}
+
+function capabilityKeys(entry) {
+  return [entry.name, entry.invoke]
+    .filter((value) => typeof value === "string")
+    .map((value) => value.trim().replace(/^\/+/, "").toLowerCase())
+    .filter(Boolean);
+}
+
+function isExcludedCapability(entry) {
+  const keys = capabilityKeys(entry);
+  return keys.some((key) => (
+    key === "my-cc-lite" ||
+    key.startsWith("my-cc-lite:") ||
+    key.startsWith("my-cc-lite/") ||
+    MY_CC_LITE_CAPABILITY_NAMES.has(key) ||
+    CLAUDE_NATIVE_CAPABILITY_NAMES.has(key)
+  ));
 }
 
 export async function registerCapability(providerName, capability) {

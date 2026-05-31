@@ -1,7 +1,6 @@
 ---
 name: status
 description: Show my-cc-lite task state, progress, blockers, and next action
-argument-hint: ""
 ---
 
 # my-cc-lite /status

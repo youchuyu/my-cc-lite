@@ -13,7 +13,7 @@ Companion plugins may:
 - write artifacts under `.my-cc-lite/tasks/<taskId>/artifacts/<provider>/`
 - register capabilities in `.my-cc-lite/capabilities.json`
 
-They should not mutate core-owned state fields directly.
+They should not mutate core-owned state fields directly. In `capabilities.json`, companion plugins should only write provider declarations under `providers`; `/init` owns the current-session `inventory`.
 
 Manual examples below use `MY_CC_LITE_HELPER` for the installed helper path:
 
@@ -29,8 +29,8 @@ Create `capability.json`:
 
 ```json
 {
-  "provider": "verification.browser",
-  "type": "verification",
+  "provider": "review.browser",
+  "type": "review",
   "plugin": "my-cc-lite-browser",
   "commands": ["/browser-test"],
   "events": ["verification.evidence.added", "verification.failed"],
@@ -44,6 +44,8 @@ Then run:
 ```bash
 node "$MY_CC_LITE_HELPER" register-capability capability.json
 ```
+
+The helper preserves any `/init` inventory already stored in `capabilities.json`.
 
 ## Add Verification Evidence
 

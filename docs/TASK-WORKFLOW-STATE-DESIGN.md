@@ -54,7 +54,7 @@ Each task directory contains:
 Project-level files have project-level responsibilities:
 
 - `current-task.json`: active task pointer.
-- `capabilities.json`: companion plugin capability registration.
+- `capabilities.json`: current-session capability inventory plus companion plugin provider registration.
 - `config.json`: project-level `my-cc-lite` configuration.
 
 Each `/plan` call must:

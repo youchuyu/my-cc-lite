@@ -7,6 +7,7 @@ This document is a quick reference. The project entry point is `../README.md`.
 It provides a minimal workflow:
 
 ```text
+/init
 /plan -> /do -> /verify -> /status
 ```
 
@@ -14,12 +15,12 @@ The core keeps state in `.my-cc-lite/` inside the active project. It does not bu
 
 ## What Is Included
 
-- Skills: `plan`, `do`, `verify`, `status`
+- Skills: `init`, `plan`, `do`, `verify`, `status`
 - Agents: `explore`, `planner`, `executor`, `verifier`
 - Hooks: `UserPromptSubmit`, `PostToolUse`, `PreCompact`, `Stop`
 - State helper: `scripts/my-cc-lite-state.mjs`
 - Workflow parser: `scripts/my-cc-lite-workflow-parser.mjs`
-- Contracts: task-local workflow state, append-only events, optional capability providers
+- Contracts: task-local workflow state, append-only events, curated capability inventory, optional capability providers
 
 ## State Files
 
@@ -61,6 +62,7 @@ If `CLAUDE_PLUGIN_ROOT` is unavailable, replace it with the absolute path to the
 
 ```bash
 node "$MY_CC_LITE_HELPER" status
+node "$MY_CC_LITE_HELPER" init-capabilities capabilities-inventory.json
 node "$MY_CC_LITE_HELPER" plan-start "Implement a small change"
 node "$MY_CC_LITE_HELPER" append-event event.json
 node "$MY_CC_LITE_HELPER" register-capability capability.json
@@ -92,6 +94,7 @@ node "$MY_CC_LITE_HELPER" summarize
 If the plugin is installed, use the command/skill flow instead:
 
 ```text
+/init
 /plan "make a tiny README edit"
 /do
 /status

@@ -5,10 +5,11 @@
 It provides a small workflow:
 
 ```text
+/init
 /plan -> /do -> /verify -> /status
 ```
 
-The core keeps project-local state in `.my-cc-lite/`. It includes planning, scoped execution guidance, verification, status, lifecycle hooks, append-only events, and optional companion-plugin capability registration. Browser automation, long-term memory, HUDs, team execution, research, LSP tooling, and autonomous loops belong in companion plugins.
+The core keeps project-local state in `.my-cc-lite/`. It includes context capability initialization, planning, scoped execution guidance, verification, status, lifecycle hooks, append-only events, and optional companion-plugin capability registration. Browser automation, long-term memory, HUDs, team execution, research, LSP tooling, and autonomous loops belong in companion plugins.
 
 ## Install
 
@@ -38,11 +39,12 @@ If your environment does not expose `CLAUDE_PLUGIN_ROOT`, replace it with the ab
 
 ## Basic Flow
 
-1. Run `/plan "<task>"`.
-2. Review `.my-cc-lite/tasks/<taskId>/plan.md`.
-3. Run `/do` until required items are complete.
-4. Run `/verify`.
-5. Use `/status` at any point to inspect progress and next action.
+1. Optionally run `/init` to write the curated current-session stage capability inventory to `.my-cc-lite/capabilities.json`.
+2. Run `/plan "<task>"`.
+3. Review `.my-cc-lite/tasks/<taskId>/plan.md`.
+4. Run `/do` until required items are complete.
+5. Run `/verify`.
+6. Use `/status` at any point to inspect progress and next action.
 
 ## State Files
 
