@@ -160,7 +160,7 @@ try {
       source: "smoke",
       summary: "state helper works from plugin path against target cwd",
       status: "passed",
-      command: "npm run smoke"
+      command: "node test/smoke.mjs"
     })
   });
   await run(["set-verification", "passed"]);

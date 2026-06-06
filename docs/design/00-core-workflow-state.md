@@ -248,7 +248,7 @@ type Step =
 字符串 step 表示一个叶子动作：
 
 ```json
-"运行 npm run check"
+"运行显式 node 检查命令"
 ```
 
 对象 step 表示一个分组动作：
@@ -449,3 +449,5 @@ helper 写状态时应使用轻量锁：
 - 能把 task 的动作清单交给 executor 子 agent。
 - 能把 task 的检查清单交给 review/verifier 子 agent。
 - 能把关闭后的任务移动到 `archived_tasks`。
+
+脚本实现边界见 `01-stage-scripts.md`。
