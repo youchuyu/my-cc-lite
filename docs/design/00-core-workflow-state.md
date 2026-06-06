@@ -1,4 +1,4 @@
-# local state design
+# Core Workflow And Local State Design
 
 本模块定义 my-cc-lite 写入目标项目的本地数据。目标是保持状态轻量、可读、可恢复，同时让计划文本、执行任务和检查任务各自承担清晰职责。
 
@@ -27,34 +27,29 @@
 - 每个任务使用一个目录。
 - 每个任务目录只保留 `task.json` 和 `plan.md`。
 - 已归档任务从 `tasks/<taskId>/` 移动到 `archived_tasks/<taskId>/`。
-- `project.json` 是项目级唯一状态源。
+- `project.json` 是项目级状态源，只由 `/init` 创建或更新。
+- 任务生命周期不更新 `project.json`。
 - `plan.md` 是计划阶段唯一产物，允许用户在执行前调整。
 - `task.json` 是执行阶段创建的任务级机器状态源。
 - `tasks[]` 面向 executor 子 agent，记录要执行的子任务。
 - `tasks[].steps[]` 记录 executor 子 agent 需要完成的动作清单，允许用轻量树形结构表达复杂动作拆解。
 - `tasks[].checks[]` 记录 review/verifier 子 agent 需要检查的内容。
-- MVP 只允许一个 current task。`project.json.currentTaskId` 不为 `null` 时，新的 `/plan` 必须阻止创建新任务。
+- MVP 只允许一个 current task。`.my-cc-lite/tasks/` 下存在未归档任务目录时，新的 `/plan` 必须阻止创建新任务。
 - 不再拆分 `current-task.json`、`capabilities.json`、`workflow.json`、`events.jsonl`、`checks.jsonl`、`evidence.jsonl`、`changed-files.json` 和 `archive.md`。
 
 ## project.json
 
-`project.json` 记录初始化信息、项目画像、当前任务指针和阶段可用能力。
+`project.json` 记录初始化信息、项目摘要和阶段可用 helper。
 
-`/init` 每次执行都会重写 `project.json` 中的项目画像和 `capabilities`。如果已有 `currentTaskId`，则保留当前指针；如果没有已有项目状态，则初始化为 `null`。`/init` 不创建、修改、切换或归档 task。
+`/init` 每次执行都会重写 `project.json` 中的项目摘要和 `stageHelpers`。`/init` 不读取或修改当前 task，也不创建、修改、切换或归档 task。
 
 ```json
 {
   "initializedAt": "2026-06-06T15:30:12+08:00",
   "updatedAt": "2026-06-06T15:40:00+08:00",
   "projectRoot": "/path/to/project",
-  "currentTaskId": "20260606-153012-add-feature",
-  "profile": {
-    "packageManager": "npm",
-    "languages": ["javascript"],
-    "frameworks": [],
-    "defaultChecks": ["npm run check"]
-  },
-  "capabilities": {
+  "projectSummary": "A Claude Code plugin project for lightweight task workflow state.",
+  "stageHelpers": {
     "planning": [],
     "execution": [],
     "review": []
@@ -62,27 +57,15 @@
 }
 ```
 
-### currentTaskId
+### projectSummary
 
-`currentTaskId` 是当前任务指针。没有当前任务时写为 `null`：
+`projectSummary` 是模型基于当前项目上下文写入的一句简短摘要。
 
-```json
-{
-  "currentTaskId": null
-}
-```
+它给后续 `/plan`、`/do` 和 `/verify` 提供轻量方向感，但不作为机器决策契约。
 
-这样 `/status` 可以直接从 `project.json` 判断当前是否有 active task，并定位：
+### stageHelpers
 
-```text
-.my-cc-lite/tasks/<currentTaskId>/
-```
-
-`currentTaskId` 只在 `/plan` 创建新任务时写入，在 `/archive` 释放当前任务时置为 `null`。MVP 不支持多个 current task，也不支持隐式切换 current task。
-
-### capabilities
-
-`capabilities` 保存 `/init` 收集到的阶段可用 companion 能力。
+`stageHelpers` 保存 `/init` 收集到的阶段可用 companion helper。
 
 只记录 my-cc-lite 阶段可以直接调用或委派的能力：
 
@@ -92,16 +75,14 @@
 
 不记录 Claude Code 原生基础工具，也不记录 my-cc-lite 自身能力。
 
-能力条目建议保持扁平：
+helper 条目保持扁平：
 
 ```json
 {
   "name": "Workflow",
   "kind": "tool",
   "description": "Run deterministic multi-agent orchestration after explicit ultrawork opt-in",
-  "invoke": "Workflow",
-  "source": "visible-tools",
-  "confidence": "high"
+  "invoke": "Workflow"
 }
 ```
 
@@ -119,6 +100,50 @@
 
 `plan.md` 供用户和 Claude Code 阅读，负责目标、计划说明、风险和整体讨论。
 
+### 当前任务定位
+
+MVP 只允许一个未归档任务。
+
+helper 通过扫描 `.my-cc-lite/tasks/` 下的任务目录定位当前任务：
+
+- 没有任务目录：当前没有 active task。
+- 只有一个任务目录：该目录就是 current task。
+- 多于一个任务目录：状态异常，helper 必须报错，不做隐式选择。
+
+这样任务生命周期不需要更新 `project.json`，归档时也只需要移动当前任务目录。
+
+### 阶段写入边界
+
+`/init` 只写 `project.json`。
+
+`/plan` 只负责创建新的任务目录和 `plan.md`：
+
+```text
+.my-cc-lite/tasks/<taskId>/plan.md
+```
+
+如果 `.my-cc-lite/tasks/` 下已经存在未归档任务目录，`/plan` 必须拒绝创建新任务。
+
+`/do` 只读写当前任务目录：
+
+- 读取 `.my-cc-lite/tasks/<taskId>/plan.md`。
+- 首次执行时创建 `.my-cc-lite/tasks/<taskId>/task.json`。
+- 后续执行时更新 `.my-cc-lite/tasks/<taskId>/task.json`。
+
+`/verify` 只读写当前任务目录：
+
+- 读取 `.my-cc-lite/tasks/<taskId>/plan.md`。
+- 读取并更新 `.my-cc-lite/tasks/<taskId>/task.json`。
+
+`/archive` 只移动当前任务目录：
+
+```text
+.my-cc-lite/tasks/<taskId>/
+-> .my-cc-lite/archived_tasks/<taskId>/
+```
+
+`/plan`、`/do`、`/verify` 和 `/archive` 都不更新 `project.json`。
+
 ## task.json
 
 `task.json` 是任务级唯一机器状态源。它不由 `/plan` 创建，而是在 `/do` 首次执行时根据当前 `plan.md` 创建：
@@ -134,26 +159,23 @@
   "tasks": [
     {
       "id": "T1",
-      "title": "初始化项目状态",
+      "title": "实现计划中的第一个子任务",
       "status": "pending",
       "steps": [
-        "创建 .my-cc-lite/project.json",
+        "阅读当前 plan.md",
         {
-          "title": "写入项目初始化字段",
+          "title": "完成代码或文档修改",
           "steps": [
-            "写入 initializedAt、updatedAt 和 projectRoot",
-            "写入 currentTaskId、profile 和 capabilities"
+            "定位需要修改的文件",
+            "按计划执行最小必要修改"
           ]
         },
-        "没有已有 currentTaskId 时初始化为 null，已有时保留",
-        "不得创建 task 目录",
-        "不得推进 plan/do/verify/archive 阶段"
+        "更新 task 级执行状态"
       ],
       "checks": [
-        "确认 /init 只写入 project.json",
-        "确认已有 currentTaskId 时会保留，没有时写为 null",
-        "确认不会创建 task 目录",
-        "确认不会推进 plan/do/verify/archive"
+        "确认修改符合 plan.md",
+        "确认 task.json 中对应 task 状态已更新",
+        "确认后续 /verify 可以根据 checks[] 检查结果"
       ]
     }
   ],
@@ -271,26 +293,23 @@ type Step =
 ```json
 {
   "id": "T1",
-  "title": "初始化项目状态",
+  "title": "实现计划中的第一个子任务",
   "status": "pending",
   "steps": [
-    "创建 .my-cc-lite/project.json",
+    "阅读当前 plan.md",
     {
-      "title": "写入项目初始化字段",
+      "title": "完成代码或文档修改",
       "steps": [
-        "写入 initializedAt、updatedAt 和 projectRoot",
-        "写入 currentTaskId、profile 和 capabilities"
+        "定位需要修改的文件",
+        "按计划执行最小必要修改"
       ]
     },
-    "没有已有 currentTaskId 时初始化为 null，已有时保留",
-    "不得创建 task 目录",
-    "不得推进 plan/do/verify/archive 阶段"
+    "更新 task 级执行状态"
   ],
   "checks": [
-    "确认 /init 只写入 project.json",
-    "确认已有 currentTaskId 时会保留，没有时写为 null",
-    "确认不会创建 task 目录",
-    "确认不会推进 plan/do/verify/archive"
+    "确认修改符合 plan.md",
+    "确认 task.json 中对应 task 状态已更新",
+    "确认后续 /verify 可以根据 checks[] 检查结果"
   ]
 }
 ```
@@ -359,7 +378,7 @@ failed
 
 ## archived_tasks
 
-`/archive` 用于关闭当前 task 并释放 `currentTaskId`，不要求 `verification.status` 为 `passed`。归档不会修改 `verification.status`，任务是否完成以 `verification.status` 是否为 `passed` 为准。
+`/archive` 用于关闭当前 task，不要求 `verification.status` 为 `passed`。归档不会修改 `verification.status`，任务是否完成以 `verification.status` 是否为 `passed` 为准。
 
 归档成功后，将任务目录从：
 
@@ -372,8 +391,6 @@ failed
 ```text
 .my-cc-lite/archived_tasks/<taskId>/
 ```
-
-同时将 `project.json.currentTaskId` 置为 `null`。
 
 归档后的 `task.json` 仍保持同一结构，只更新：
 
