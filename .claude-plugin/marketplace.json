@@ -1,7 +1,9 @@
 {
   "name": "my-cc-lite",
-  "interface": {
-    "displayName": "my-cc-lite"
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "description": "Claude Code lite orchestration",
+  "owner": {
+    "name": "Youchu Yu"
   },
   "plugins": [
     {

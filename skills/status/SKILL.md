@@ -1,32 +1,32 @@
 ---
 name: status
-description: Show my-cc-lite task state, progress, blockers, and next action
+description: 显示 my-cc-lite 任务状态、进度、blocker 和下一步操作
 ---
 
 # my-cc-lite /status
 
-Use this skill to inspect or recover the current workflow.
+使用此 skill 检查或恢复当前工作流。
 
-Use the helper from the installed plugin root while keeping the target project as the current working directory:
+在保持目标项目为当前工作目录的同时，从已安装插件根目录使用 helper：
 
 ```bash
 MY_CC_LITE_HELPER="$CLAUDE_PLUGIN_ROOT/scripts/my-cc-lite-state.mjs"
 ```
 
-## Steps
+## 步骤
 
-1. Run:
+1. 运行：
 
 ```bash
 node "$MY_CC_LITE_HELPER" status
 ```
 
-2. If state is missing, recommend `/plan "<task>"`.
-3. If workflow state is malformed, report the exact file and JSON error.
-4. If blockers exist, surface them before recommending more execution.
-5. If changed files exist and verification has not passed, recommend `/verify`.
+2. 如果状态缺失，推荐 `/plan "<task>"`。
+3. 如果 workflow 状态格式错误，报告准确文件和 JSON 错误。
+4. 如果存在 blockers，在推荐继续执行之前先指出它们。
+5. 如果存在已变更文件且验证尚未通过，推荐 `/verify`。
 
-## Output
+## 输出
 
 ```text
 Task: ...

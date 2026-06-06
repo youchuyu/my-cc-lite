@@ -1,23 +1,26 @@
 # my-cc-lite
 
-This directory is the source of truth for the standalone lightweight Claude Code orchestration plugin.
+本项目仍处于开发启动阶段。这里记录设计思路，用来帮助后续实现保持方向一致，而不是固定当前文件结构或实现细节。
 
-## Scope
+当前不需要过多考虑向后兼容、版本迁移或保留临时接口；允许为形成更好的最终版本进行破坏性变更。
 
-- Keep the core small: planning, execution guidance, verification, status, local state, events, capabilities, and lifecycle hooks.
-- Do not add team runtime, browser automation, memory, HUD, LSP, research, or advanced autonomous loops to the core.
-- Prefer file-backed state under `.my-cc-lite/` over databases, daemons, or hidden global state.
-- Default behavior is soft guidance. Strict behavior may be represented in config/state, but hooks should not hard-block by default.
+## 基础理解
 
-## Implementation Rules
+- my-cc-lite 是 Claude Code 插件，不是独立 agent runtime。
+- Claude Code 负责对话、工具调用、文件编辑和模型执行；my-cc-lite 只补充轻量的任务状态、阶段提示和本地记录。
 
-- Keep scripts dependency-free Node.js modules.
-- Preserve inspectable JSON and Markdown artifacts.
-- Update docs when changing state, event, capability, or hook contracts.
-- Keep implementation decisions grounded in this project. Do not introduce external project names, runtime assumptions, or unrelated orchestration features.
+## 设计思路
 
-## Verification
+- core 优先保持轻量，先验证最小可用流程；专门能力优先作为 companion plugin 或后续扩展。
+- 优先保持单一路径。默认选择清晰、直接、可解释的主流程，避免在需求尚未稳定前引入并行语义、可选分支或额外模式。
+- 避免提前固化后续阶段状态。每个阶段只沉淀当前阶段已经确定的信息，后续阶段的状态应在进入对应阶段后再形成。
+- 状态应尽量本地、可读、可恢复，方便调试和手动接管。
+- 默认以提示和记录为主，避免过早引入强制阻断、后台常驻、独立调度或复杂自动化。
 
-- For script changes, run the relevant `node scripts/my-cc-lite-state.mjs ...` command from this directory and the package smoke test when behavior changes.
-- For hook changes, run the hook file directly with representative JSON on stdin when practical.
-- For documentation-only changes, verify paths and command examples.
+## 模块思路
+
+- skills 负责阶段入口和操作指引。
+- hooks 负责轻量提醒、记录和状态补充。
+- agents 负责可委派的专门判断或执行。
+- scripts 负责可复用的状态读写和校验逻辑。
+- docs 负责记录设计取舍和当前契约。
