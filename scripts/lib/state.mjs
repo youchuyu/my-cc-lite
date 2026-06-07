@@ -1,4 +1,4 @@
-import { mkdir, open, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { StateError, validateProject } from "./schema.mjs";
 
@@ -12,6 +12,8 @@ export function statePaths(projectRoot) {
     projectRoot: resolvedRoot,
     stateRoot,
     projectPath: path.join(stateRoot, "project.json"),
+    tasksRoot: path.join(stateRoot, "tasks"),
+    archivedTasksRoot: path.join(stateRoot, "archived_tasks"),
     lockPath: path.join(stateRoot, "state.lock")
   };
 }
@@ -45,9 +47,59 @@ export async function writeProject(projectRoot, project) {
   await rename(tempPath, projectPath);
 }
 
-export async function withStateLock(projectRoot, fn) {
+export async function listActiveTaskDirs(projectRoot) {
+  const { tasksRoot } = statePaths(projectRoot);
+  let entries;
+  try {
+    entries = await readdir(tasksRoot, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code === "ENOENT") return [];
+    throw error;
+  }
+  return entries
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => path.join(tasksRoot, entry.name))
+    .sort();
+}
+
+export async function getCurrentTaskDir(projectRoot) {
+  const taskDirs = await listActiveTaskDirs(projectRoot);
+  if (taskDirs.length === 0) return null;
+  if (taskDirs.length === 1) return taskDirs[0];
+  throw new StateError("MULTIPLE_ACTIVE_TASKS", "Multiple active task directories exist.");
+}
+
+export async function createTaskDir(projectRoot, taskId) {
+  const { tasksRoot } = statePaths(projectRoot);
+  await mkdir(tasksRoot, { recursive: true });
+  const taskDir = path.join(tasksRoot, taskId);
+  try {
+    await mkdir(taskDir);
+  } catch (error) {
+    if (error?.code === "EEXIST") {
+      throw new StateError("TASK_ID_COLLISION", `Task directory already exists: ${taskId}.`);
+    }
+    throw error;
+  }
+  return taskDir;
+}
+
+export async function writePlan(taskDir, markdown) {
+  if (typeof markdown !== "string" || !markdown.trim()) {
+    throw new StateError("INVALID_INPUT", "planMarkdown must be a non-empty string.");
+  }
+  const planPath = path.join(taskDir, "plan.md");
+  const tempPath = `${planPath}.tmp-${process.pid}-${Date.now()}`;
+  const content = markdown.endsWith("\n") ? markdown : `${markdown}\n`;
+  await writeFile(tempPath, content, "utf8");
+  await rename(tempPath, planPath);
+  return planPath;
+}
+
+export async function withStateLock(projectRoot, fn, options = {}) {
   await ensureStateRoot(projectRoot);
   const { lockPath } = statePaths(projectRoot);
+  const operation = options.operation || "init-project";
   const start = Date.now();
   let handle = null;
   while (!handle) {
@@ -67,7 +119,7 @@ export async function withStateLock(projectRoot, fn) {
         {
           pid: process.pid,
           createdAt: new Date().toISOString(),
-          operation: "init-project"
+          operation
         },
         null,
         2

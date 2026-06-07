@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, realpath, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 
 const pluginRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const initScript = path.join(pluginRoot, "scripts", "init.mjs");
+const planScript = path.join(pluginRoot, "scripts", "plan.mjs");
 const targetDir = await mkdtemp(path.join(os.tmpdir(), "my-cc-lite-init-smoke-"));
 const targetRoot = await realpath(targetDir);
 
@@ -38,6 +39,32 @@ function runInitFail(input) {
   return payload.error;
 }
 
+function runPlan(input) {
+  const result = spawnSync(process.execPath, [planScript, "create-task"], {
+    cwd: targetDir,
+    input,
+    encoding: "utf8"
+  });
+  const payload = parseOutput(result.stdout);
+  if (result.status !== 0) {
+    throw new Error(`create-task failed:\n${result.stdout || result.stderr}`);
+  }
+  assert.equal(payload.ok, true);
+  return payload.result;
+}
+
+function runPlanFail(input) {
+  const result = spawnSync(process.execPath, [planScript, "create-task"], {
+    cwd: targetDir,
+    input,
+    encoding: "utf8"
+  });
+  const payload = parseOutput(result.stdout);
+  assert.notEqual(result.status, 0, "create-task unexpectedly passed");
+  assert.equal(payload.ok, false);
+  return payload.error;
+}
+
 function parseOutput(output) {
   try {
     return JSON.parse(output);
@@ -55,6 +82,15 @@ function wait(ms) {
 }
 
 try {
+  const uninitializedPlanError = runPlanFail(
+    JSON.stringify({
+      objective: "Create a plan before init",
+      planMarkdown: "# Task: pending\n\n## Objective\n\nCreate a plan before init.\n\n## Plan\n\n1. Try plan creation."
+    })
+  );
+  assert.equal(uninitializedPlanError.code, "PROJECT_NOT_INITIALIZED");
+  assert.equal(existsSync(path.join(targetDir, ".my-cc-lite", "project.json")), false);
+
   const first = runInit(
     JSON.stringify({
       projectSummary: "First summary.",
@@ -198,6 +234,60 @@ try {
     assert.equal(helperTokens.includes(excludedName), false, `${excludedName} remained in stageHelpers`);
   }
   assert.equal(existsSync(path.join(targetDir, ".my-cc-lite", "tasks")), false);
+
+  const beforePlanProject = await readFile(path.join(targetDir, ".my-cc-lite", "project.json"), "utf8");
+  const planMarkdown = [
+    "# Task: pending",
+    "",
+    "## Objective",
+    "",
+    "Create a plan-stage smoke task.",
+    "",
+    "## Scope",
+    "",
+    "Only verify plan state writes.",
+    "",
+    "## Plan",
+    "",
+    "1. Create the plan artifact",
+    "   - Goal: Confirm /plan can create plan.md.",
+    "   - Do: Run create-task with a valid planMarkdown.",
+    "   - Check: plan.md exists and task.json does not.",
+    "",
+    "## Notes",
+    "",
+    "Smoke fixture."
+  ].join("\n");
+  const plan = runPlan(
+    JSON.stringify({
+      objective: "Create a plan-stage smoke task",
+      planMarkdown
+    })
+  );
+  assert.match(plan.taskId, /^\d{8}-\d{6}-create-a-plan-stage-smoke-task$/);
+  assert.equal(plan.taskDir, path.join(targetRoot, ".my-cc-lite", "tasks", plan.taskId));
+  assert.equal(plan.planPath, path.join(plan.taskDir, "plan.md"));
+  assert.equal(await readFile(plan.planPath, "utf8"), `${planMarkdown}\n`);
+  assert.equal(existsSync(path.join(plan.taskDir, "task.json")), false);
+  assert.equal(await readFile(path.join(targetDir, ".my-cc-lite", "project.json"), "utf8"), beforePlanProject);
+
+  const activeTaskError = runPlanFail(
+    JSON.stringify({
+      objective: "Create a second active task",
+      planMarkdown: "# Task: pending\n\n## Objective\n\nCreate another task.\n\n## Plan\n\n1. Should fail."
+    })
+  );
+  assert.equal(activeTaskError.code, "ACTIVE_TASK_EXISTS");
+  assert.equal(await readFile(path.join(targetDir, ".my-cc-lite", "project.json"), "utf8"), beforePlanProject);
+
+  await mkdir(path.join(targetDir, ".my-cc-lite", "tasks", "manual-extra-task"));
+  const multipleActiveError = runPlanFail(
+    JSON.stringify({
+      objective: "Create a task with multiple active dirs",
+      planMarkdown: "# Task: pending\n\n## Objective\n\nCreate with bad state.\n\n## Plan\n\n1. Should fail."
+    })
+  );
+  assert.equal(multipleActiveError.code, "MULTIPLE_ACTIVE_TASKS");
 
   process.stdout.write(`smoke passed: ${targetDir}\n`);
 } finally {

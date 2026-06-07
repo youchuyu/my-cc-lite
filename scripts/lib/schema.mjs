@@ -54,6 +54,24 @@ export function normalizeInitInput(input) {
   };
 }
 
+export function normalizePlanInput(input) {
+  if (!isPlainObject(input)) {
+    throw new StateError("INVALID_INPUT", "create-task input must be a JSON object.");
+  }
+  const objective = normalizeRequiredString(input.objective, "objective");
+  const planMarkdown = normalizeRequiredString(input.planMarkdown, "planMarkdown").trimEnd();
+  if (!planMarkdown.includes("## Objective")) {
+    throw new StateError("INVALID_INPUT", "planMarkdown must include a ## Objective section.");
+  }
+  if (!planMarkdown.includes("## Plan")) {
+    throw new StateError("INVALID_INPUT", "planMarkdown must include a ## Plan section.");
+  }
+  return {
+    objective,
+    planMarkdown
+  };
+}
+
 export function validateProject(project) {
   if (!isPlainObject(project)) {
     throw new StateError("INVALID_PROJECT_STATE", "project must be a JSON object.");
@@ -67,6 +85,28 @@ export function validateProject(project) {
   normalizeRequiredString(project.projectSummary, "projectSummary", "INVALID_PROJECT_STATE");
   normalizeStageHelpers(project.stageHelpers, "INVALID_PROJECT_STATE");
   return project;
+}
+
+export function assertInitializedProject(project) {
+  if (!project) {
+    throw new StateError("PROJECT_NOT_INITIALIZED", "Project is not initialized. Run /init before /plan.");
+  }
+  validateProject(project);
+  return project;
+}
+
+export function assertNoActiveTask(activeTaskDirs) {
+  if (!Array.isArray(activeTaskDirs)) {
+    throw new StateError("INVALID_PROJECT_STATE", "activeTaskDirs must be an array.");
+  }
+  if (activeTaskDirs.length === 0) return;
+  if (activeTaskDirs.length === 1) {
+    throw new StateError(
+      "ACTIVE_TASK_EXISTS",
+      "已有未归档任务。请先查看 /status，继续 /do 或 /verify，或者用 /archive 关闭当前任务后再创建新计划。"
+    );
+  }
+  throw new StateError("MULTIPLE_ACTIVE_TASKS", "Multiple active task directories exist.");
 }
 
 export function filterStageHelpers(stageHelpers) {
