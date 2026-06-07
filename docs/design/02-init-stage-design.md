@@ -169,7 +169,7 @@ type StageHelpers = {
 
 type StageHelper = {
   name: string;
-  kind: "skill" | "agent" | "tool";
+  type: "skill" | "agent" | "tool";
   invoke: string;
   description: string;
 };
@@ -178,7 +178,7 @@ type StageHelper = {
 字段含义：
 
 - `name`：helper 的展示名或稳定名称。
-- `kind`：helper 类型，只允许 `skill`、`agent` 或 `tool`。
+- `type`：helper 类型，只允许 `skill`、`agent` 或 `tool`。
 - `invoke`：对应阶段提示词中可以直接引用的调用标识。
 - `description`：一句话说明该 helper 在对应阶段能帮 my-cc-lite 做什么。
 
@@ -193,7 +193,7 @@ type StageHelper = {
 ```json
 {
   "name": "codegraph_context",
-  "kind": "tool",
+  "type": "tool",
   "invoke": "mcp__codegraph.codegraph_context",
   "description": "Collect code context before /plan drafts implementation tasks"
 }
@@ -210,7 +210,7 @@ type StageHelper = {
 ```json
 {
   "name": "code-review",
-  "kind": "skill",
+  "type": "skill",
   "invoke": "code-review",
   "description": "Review completed code changes before /verify marks the task passed"
 }
@@ -221,7 +221,7 @@ type StageHelper = {
 ```json
 {
   "name": "code-review",
-  "kind": "skill",
+  "type": "skill",
   "invoke": "code-review",
   "description": "A powerful code review skill that can inspect repositories and provide high quality feedback"
 }
@@ -351,8 +351,8 @@ helper 应校验：
 - stdin 必须是 JSON object。
 - `projectSummary` 必须是非空字符串。
 - `stageHelpers.planning`、`execution`、`review` 必须是数组。
-- 每个 helper 必须包含 `name`、`kind`、`invoke`、`description`。
-- `kind` 只允许 `skill`、`agent`、`tool`。
+- 每个 helper 必须包含 `name`、`type`、`invoke`、`description`。
+- `type` 只允许 `skill`、`agent`、`tool`。
 - `description` 必须是非空字符串。
 - 过滤 my-cc-lite 自身能力。
 - 过滤已知 Claude Code 宿主基础能力 denylist。

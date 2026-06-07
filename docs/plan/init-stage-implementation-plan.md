@@ -253,13 +253,13 @@ filterStageHelpers(stageHelpers)
 ```ts
 {
   name: string;
-  kind: "skill" | "agent" | "tool";
+  type: "skill" | "agent" | "tool";
   invoke: string;
   description: string;
 }
 ```
 
-`kind` 只能是：
+`type` 只能是：
 
 ```text
 skill
@@ -300,7 +300,7 @@ my-cc-lite:archive
 
 过滤时同时检查 `name` 和 `invoke`。
 
-同一阶段内按 `kind + invoke` 去重，保留第一次出现的条目。不要跨阶段去重，因为同一个 helper 可能确实服务多个阶段。
+同一阶段内按 `type + invoke` 去重，保留第一次出现的条目。不要跨阶段去重，因为同一个 helper 可能确实服务多个阶段。
 
 脚本不判断“当前上下文是否真的可见”，这个判断由 `skills/init/SKILL.md` 引导 Claude Code 完成。脚本只负责兜底排除已知不应写入的条目。
 
@@ -418,7 +418,7 @@ skill 需要强调：
 ```json
 {
   "name": "codegraph_context",
-  "kind": "tool",
+  "type": "tool",
   "invoke": "mcp__codegraph.codegraph_context",
   "description": "Collect code context before /plan drafts implementation tasks"
 }
@@ -448,7 +448,7 @@ skill 需要强调：
 ```json
 {
   "name": "code-review",
-  "kind": "skill",
+  "type": "skill",
   "invoke": "code-review",
   "description": "Review completed code changes before /verify marks the task passed"
 }
@@ -502,7 +502,7 @@ test/smoke.mjs
    - 断言原 `project.json` 内容未损坏。
 
 5. 非法 helper
-   - 输入缺少 `invoke` 或 `kind` 非法的 helper。
+   - 输入缺少 `invoke` 或 `type` 非法的 helper。
    - 断言命令失败或被拒绝。
    - 断言旧 `project.json` 不被修改。
 

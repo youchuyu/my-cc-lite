@@ -80,7 +80,7 @@ helper 条目保持扁平：
 ```json
 {
   "name": "Workflow",
-  "kind": "tool",
+  "type": "tool",
   "description": "Run deterministic multi-agent orchestration after explicit ultrawork opt-in",
   "invoke": "Workflow"
 }
