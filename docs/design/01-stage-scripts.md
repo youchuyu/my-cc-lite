@@ -196,6 +196,8 @@ renderPlanMarkdown(input)
 
 `do.mjs` 对应 `/do`。
 
+详细阶段方案见 `04-do-stage-design.md`。脚本层只负责确定性状态读写，不负责理解业务代码或替模型执行任务。
+
 建议提供两个子命令：
 
 ```text
@@ -207,7 +209,7 @@ node scripts/do.mjs update-task
 
 ```json
 {
-  "objective": "User objective",
+  "objective": "Objective snapshot derived from current plan.md",
   "tasks": [
     {
       "id": "T1",
@@ -222,26 +224,33 @@ node scripts/do.mjs update-task
 
 `materialize` 行为：
 
+- 读取并校验 `.my-cc-lite/project.json`。
 - 定位唯一 active task。
 - 读取当前 `plan.md`。
+- 校验 `objective` 非空、`tasks[]` 结构合法，以及 `steps[]` / `checks[]` 满足最小结构要求。
 - 如果 `task.json` 不存在，根据输入创建任务级机器状态。
-- 如果 `task.json` 已存在，根据输入更新 `tasks[]`。
+- 如果 `task.json` 已存在，不做写入，返回 `TASK_ALREADY_MATERIALIZED`。
 - 设置顶层 `status: "active"` 和 `stage: "executing"`。
+- 初始化或保留 `verification` 和 `archive`。
+- 输出 `taskId`、`task.json` 路径、`plan.md` 路径和 `tasks[]` 摘要。
 
 `update-task` 输入：
 
 ```json
 {
-  "taskId": "T1",
+  "id": "T1",
   "status": "completed"
 }
 ```
 
 `update-task` 行为：
 
+- 读取并校验 `.my-cc-lite/project.json`。
 - 定位唯一 active task。
-- 更新指定 `tasks[].status`。
+- 读取并校验 `task.json`。
+- 更新指定 `tasks[].id` 对应 task 的 `status`。
 - 刷新顶层 `updatedAt`。
+- 如果所有 task 都是 `completed` 或 `skipped`，顶层仍保持 `stage: "executing"`，由 `/verify` 推进到验证阶段。
 
 禁止：
 
@@ -249,6 +258,7 @@ node scripts/do.mjs update-task
 - 不记录 step 级状态。
 - 不记录 changed files。
 - 不写执行日志。
+- 不自动推进 `/verify` 或 `/archive`。
 
 ### verify.mjs
 
@@ -414,6 +424,7 @@ NO_ACTIVE_TASK
 MULTIPLE_ACTIVE_TASKS
 PLAN_NOT_FOUND
 TASK_STATE_NOT_FOUND
+TASK_ALREADY_MATERIALIZED
 TASK_NOT_FOUND
 TASK_NOT_VERIFIABLE
 ARCHIVE_TARGET_EXISTS
@@ -437,8 +448,8 @@ scripts 负责可复用的状态读写和校验逻辑。
 
 因此：
 
-- skill 可以调用阶段入口脚本。
-- agent 可以根据阶段提示调用阶段入口脚本。
+- 阶段 skill / orchestrator 可以调用对应阶段入口脚本。
+- agent 是否可以调用脚本由具体阶段设计决定；默认不直接写状态。
 - hook 可以调用只读或短写入脚本。
 - skill、agent 和 hook 不应复制 `.my-cc-lite/` 路径扫描、锁、JSON 写入或 current task 定位逻辑。
 

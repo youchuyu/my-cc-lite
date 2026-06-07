@@ -151,7 +151,7 @@ helper 通过扫描 `.my-cc-lite/tasks/` 下的任务目录定位当前任务：
 ```json
 {
   "taskId": "20260606-153012-add-feature",
-  "objective": "用户原始目标",
+  "objective": "从当前 plan.md 提取或归纳的目标快照",
   "status": "active",
   "stage": "executing",
   "createdAt": "2026-06-06T15:30:12+08:00",
@@ -176,7 +176,8 @@ helper 通过扫描 `.my-cc-lite/tasks/` 下的任务目录定位当前任务：
         "确认修改符合 plan.md",
         "确认 task.json 中对应 task 状态已更新",
         "确认后续 /verify 可以根据 checks[] 检查结果"
-      ]
+      ],
+      "statusReason": ""
     }
   ],
   "verification": {
@@ -190,7 +191,9 @@ helper 通过扫描 `.my-cc-lite/tasks/` 下的任务目录定位当前任务：
 }
 ```
 
-`/do` 根据当前 `plan.md` 创建或更新 `tasks[]`，并在每个 task 内写入对应的 `steps[]` 和 `checks[]`。`steps[]` 可以用嵌套结构表达动作层级，但不记录 step 级状态。进入执行阶段后，`task.json` 记录执行状态；`/verify` 同时参考最新 `plan.md` 和 `task.json` 判断任务是否完成。
+`/do` 首次执行时根据当前 `plan.md` 创建 `tasks[]`，并在每个 task 内写入对应的 `steps[]` 和 `checks[]`。`task.json` 创建后，`tasks[]` 作为执行阶段固化结构，不再由 `/do` 自动同步 `plan.md`。`steps[]` 可以用嵌套结构表达动作层级，但不记录 step 级状态。进入执行阶段后，`task.json` 记录执行状态；`/verify` 同时参考最新 `plan.md` 和 `task.json` 判断任务是否完成。
+
+`objective` 是 `/do` 首次物化时从当前 `plan.md` 的 `Objective` 部分提取或归纳得到的目标快照，用于状态摘要和快速查看。它不是独立输入源，也不覆盖 `plan.md`。
 
 ## plan.md
 
@@ -216,7 +219,7 @@ helper 通过扫描 `.my-cc-lite/tasks/` 下的任务目录定位当前任务：
 
 `/plan` 创建任务时只写入 `plan.md`，不创建 `task.json`，也不把可执行子任务同步到 `task.json.tasks[]`。每个 task 的执行动作和检查要求由 `/do` 在执行阶段根据最新 `plan.md` 生成。
 
-后续如果用户手动调整 `plan.md`，不需要额外 sync。下一次 `/do` 读取最新 `plan.md`，并据此决定后续执行拆解。
+如果用户在 `task.json` 创建前手动调整 `plan.md`，不需要额外 sync。首次 `/do` 读取最新 `plan.md` 并固化执行拆解；`task.json` 创建后，`/do` 不再根据 `plan.md` 自动重写 `tasks[]`。
 
 ## tasks[]
 
@@ -229,6 +232,7 @@ helper 通过扫描 `.my-cc-lite/tasks/` 下的任务目录定位当前任务：
 - `status`：执行状态。
 - `steps`：可嵌套动作清单，记录 executor 子 agent 需要完成的执行拆解。
 - `checks`：字符串数组，记录 review/verifier 子 agent 需要检查的内容。
+- `statusReason`：可选字符串，只在 `blocked`、`failed`、`skipped` 时保存一句短原因，便于后续恢复；不保存完整日志、命令输出、changed files 或 agent 响应。
 
 ### steps
 
@@ -310,11 +314,14 @@ type Step =
     "确认修改符合 plan.md",
     "确认 task.json 中对应 task 状态已更新",
     "确认后续 /verify 可以根据 checks[] 检查结果"
-  ]
+  ],
+  "statusReason": ""
 }
 ```
 
-`tasks[]` 不记录 changed files、执行命令或完整日志。执行完成后只回写 task 级 `status`。如果失败或阻塞原因需要保留，优先写入 `verification.summary` 或归档摘要，不在 task 内维护半结构化日志。
+`tasks[]` 不记录 changed files、执行命令或完整日志。执行完成后只回写 task 级 `status` 和可选 `statusReason`。`statusReason` 只保留一句恢复所需的短原因，不在 task 内维护半结构化日志。
+
+`task.json` 创建后，`tasks[]` 的结构不再由 `/do` 自动修改。`/do` 不新增、删除、重排、合并、拆分 task，也不修改 `tasks[].id`、`tasks[].title`、`tasks[].steps` 或 `tasks[].checks`。若需要改变执行拆解结构，应回到 `/plan` 重新规划当前任务。
 
 `tasks[].steps[]` 存储的是执行动作，不是状态机。`/do` 可以按自然顺序递归展开分组 step，但只回写 task 级状态，不回写每条 step 的完成状态。
 
@@ -330,6 +337,8 @@ blocked
 verified
 archived
 ```
+
+顶层 `status: "blocked"` 是 `/do` 根据子 task 状态汇总出来的任务级状态，表示当前任务没有可继续推进的执行项，需要用户、权限、外部条件或计划调整后才能继续。具体原因保存在对应 `tasks[].statusReason` 中。
 
 任务阶段：
 
@@ -450,4 +459,4 @@ helper 写状态时应使用轻量锁：
 - 能把 task 的检查清单交给 review/verifier 子 agent。
 - 能把关闭后的任务移动到 `archived_tasks`。
 
-脚本实现边界见 `01-stage-scripts.md`。
+脚本实现边界见 `01-stage-scripts.md`。`/do` 阶段的执行拆解、首次物化和状态推进细节见 `04-do-stage-design.md`。
