@@ -33,11 +33,11 @@
 
 如果没有 active task，`/do` 应提示先执行 `/plan`。如果存在多个 active task，`/do` 必须停止，不做隐式选择。
 
-`/do` 的输出是一次执行推进结果：
+`/do` 的输出是一次连续执行推进结果：
 
 - 首次执行时创建 `.my-cc-lite/tasks/<taskId>/task.json`。
 - 后续执行时更新已有 `task.json` 中的 task 级状态。
-- 在对话中说明本轮完成内容、局部检查结果、阻塞原因或下一步建议。
+- 在对话中说明本次完成内容、局部检查结果、阻塞原因或下一步建议。
 
 `/do` 不负责：
 
@@ -52,17 +52,18 @@
 
 `/do` skill 负责模型侧协作，`scripts/do.mjs` 只负责确定性状态读写。
 
-MVP 默认一次 `/do` 只推进一个 task。用户连续调用 `/do` 时，从已有 `task.json` 恢复进度并继续处理下一个可执行 task。
+默认一次 `/do` 连续推进当前 active task 中所有可执行的 task。每次状态写入仍只更新一个 task；用户再次调用 `/do` 时，从已有 `task.json` 恢复进度并继续处理剩余可执行 task。
 
 ### 执行方式选择
 
-`/do` skill 选定本轮要执行的 task 后，先让模型基于当前 `plan.md`、`task.json`、当前 task 和可见上下文，列举可用于编排 agent 完成本轮 task 的高阶执行能力，再整理给用户选择。
+`/do` skill 开始连续执行前，先让模型基于当前 `plan.md`、`task.json`、当前 task 和可见上下文，列举可用于编排 agent 完成这些 task 的高阶执行能力，再整理给用户选择或直接采用推荐方式。
 
-候选项只包括能编排或委派 agent 的能力，例如 my-cc-lite `/do` 原生执行、外部 executor agent、外部 workflow/helper。不要列举 `Read`、`Write`、`Edit`、`Bash` 等原子工具。
+候选项只包括能编排或委派执行的高阶能力，例如 my-cc-lite `/do` 原生执行、外部高阶执行能力如：Workflow
+、TeamCreate等。不要列举 `Read`、`Write`、`Edit`、`Bash` 等原子工具，也不要列举 my-cc-lite 内置的 `executor`、`verifier`、`debugger`。
 
-模型列举时应说明每个候选项的适用性、风险和是否推荐。如果没有合适的外部高阶能力，默认使用 my-cc-lite `/do` 原生执行。
+模型列举时应说明每个候选项的适用性、风险和是否推荐。如果用户已明确要求连续执行，或没有合适的外部高阶能力，默认使用 my-cc-lite `/do` 原生执行，不在每个 task 前反复请求确认。
 
-执行方式选择只影响本轮如何执行当前 task，不写入 `project.json`、`task.json` 或新的 metadata。`scripts/do.mjs` 不负责发现、选择或调用执行方式。
+执行方式选择只影响本次 `/do` 如何执行当前 task，不写入 `project.json`、`task.json` 或新的 metadata。`scripts/do.mjs` 不负责发现、选择或调用执行方式。
 
 ### 主流程
 
@@ -72,14 +73,27 @@ MVP 默认一次 `/do` 只推进一个 task。用户连续调用 `/do` 时，从
 4. 读取 `task.json`。
 5. 如果 `task.json` 不存在，执行首次物化。
 6. 选择下一个可执行 task。
-7. 确定本轮执行方式。
+7. 确定本次执行方式。
 8. 调用 `scripts/do.mjs update-task` 将该 task 标记为 `in_progress`。
 9. 按已选执行方式执行当前 task。
 10. 执行完成后，委派 `verifier` 的 `task_review` mode，或由 `/do` skill 自行做局部检查。
 11. 根据执行和局部检查结果，将该 task 标记为 `completed`、`blocked` 或 `failed`。
-12. 返回本次完成内容、局部检查结果、当前剩余 task 和下一步建议。
+12. 重新读取或使用最新 `task.json.tasks[]` 摘要。
+13. 如果仍有可执行 `pending` task，继续执行步骤 6。
+14. 如果所有 task 都是 `completed` 或 `skipped`，提示进入 `/verify`。
+15. 如果出现停止条件，返回本次完成内容、局部检查结果、当前剩余 task 和下一步建议。
 
-首次 `/do` 在 `materialize` 成功后，MVP 默认继续选择第一个 `pending` task 并推进一个 task。只有当首次拆解结果还需要用户确认，或拆解本身暴露了会影响计划方向、范围边界或验收口径的缺口时，才在创建 `task.json` 后停止。
+首次 `/do` 在 `materialize` 成功后，默认继续选择第一个 `pending` task，并在该 task 通过局部检查后继续推进下一个 `pending` task。只有当首次拆解结果还需要用户确认，或拆解本身暴露了会影响计划方向、范围边界或验收口径的缺口时，才在创建 `task.json` 后停止。
+
+### 停止条件
+
+连续执行遇到以下情况必须停止：
+
+- 当前 task 执行失败，或局部检查结论为 `needs_fix` 且无法给出清晰的最小修复路径。
+- 当前 task 需要用户确认业务取舍、权限、外部账号、破坏性操作或计划范围调整。
+- 当前 task 被标记为 `blocked` 或 `failed`。
+- 继续执行会扩大修改范围、改变验收口径，或让后续 task 依赖不可信的中间状态。
+- 所有 task 都已是 `completed` 或 `skipped`。
 
 ### 首次物化
 
@@ -109,7 +123,7 @@ MVP 默认一次 `/do` 只推进一个 task。用户连续调用 `/do` 时，从
 - 查看项目顶层结构，用于判断任务应按文件、模块还是文档拆分。
 - 读取少量已有约定文档，例如 README 或设计说明。
 
-如果拆解必须依赖大量实现细节，`/do` 不应在主流程里继续展开读取。此时应暂停执行，提示回到 `/plan` 补清范围，或本轮只形成粗粒度 `tasks[]` 后停止，不继续执行 task。
+如果拆解必须依赖大量实现细节，`/do` 不应在主流程里继续展开读取。此时应暂停执行，提示回到 `/plan` 补清范围，或本次只形成粗粒度 `tasks[]` 后停止，不继续执行 task。
 
 ### 后续执行
 
@@ -131,7 +145,7 @@ MVP 默认一次 `/do` 只推进一个 task。用户连续调用 `/do` 时，从
 
 ### task 选择
 
-`/do` 每轮选择一个可执行 task。
+`/do` 在连续执行循环中每次选择一个可执行 task。
 
 推荐顺序：
 
@@ -142,7 +156,7 @@ MVP 默认一次 `/do` 只推进一个 task。用户连续调用 `/do` 时，从
 5. 如果所有 task 都是 `completed` 或 `skipped`，提示进入 `/verify`。
 6. 如果只剩无法恢复的 `blocked` 或 `failed` task，提示用户处理失败或调整计划。
 
-`/do` 不需要维护单独的 current task pointer。当前要执行哪个 task 由 `tasks[]` 状态和本轮选择决定。
+`/do` 不需要维护单独的 current task pointer。当前要执行哪个 task 由 `tasks[]` 状态和循环中的选择结果决定。
 
 ## 状态写入
 
@@ -160,7 +174,7 @@ skipped
 状态语义：
 
 - `pending`：尚未执行。
-- `in_progress`：本轮 `/do` 正在执行。
+- `in_progress`：本次 `/do` 当前正在执行。
 - `completed`：本 task 的执行动作已经完成，等待 `/verify` 根据 `checks[]` 做最终验证。
 - `failed`：执行失败，且不是简单等待用户输入或外部条件。
 - `blocked`：需要用户决策、权限、外部条件或计划调整后才能继续。
@@ -204,7 +218,7 @@ skipped
 
 ### do skill
 
-`/do` skill 统一负责判断本轮是首次物化还是后续执行、从 `plan.md` 生成首次 `tasks[]`、选择本轮 task、调用阶段脚本写入状态，并根据 executor、verifier 或 debugger 返回结果决定 task 状态。
+`/do` skill 统一负责判断本次调用是首次物化还是后续执行、从 `plan.md` 生成首次 `tasks[]`、循环选择可执行 task、调用阶段脚本写入状态，并根据 executor、verifier 或 debugger 返回结果决定 task 状态。
 
 `/do` 阶段的状态写入只能由 `/do` skill 完成。executor、verifier、debugger 和 execution helper 不直接调用 `scripts/do.mjs materialize` 或 `scripts/do.mjs update-task`，也不读写 `task.json`。
 

@@ -24,7 +24,7 @@ description: 收敛任务方案并创建 my-cc-lite plan.md
 5. 根据用户目标读取必要的本地文件、文档、配置或错误输出。
 6. 只在影响目标、范围、方案方向或验收口径时向用户澄清。
 7. 生成最终 `planMarkdown`。
-8. 在目标项目根目录中调用 `node "$CLAUDE_PLUGIN_ROOT/scripts/plan.mjs" create-task`，通过 stdin 传入 JSON。
+8. 在目标项目根目录中调用 plan 阶段脚本，通过 stdin 传入 JSON。
 9. 根据脚本返回汇总 `taskId`、`plan.md` 路径或失败原因。
 
 ## 计划生成方式
@@ -47,15 +47,23 @@ description: 收敛任务方案并创建 my-cc-lite plan.md
 
 - 如果用户已经明确指定方式，可以直接继续，不必重复询问。
 - 计划生成方式只影响本次对话协作，不写入 my-cc-lite 状态。
-- 无论用户选择哪种方式，只要仍在 my-cc-lite `/plan` 流程内，最终都必须调用：
+- 无论用户选择哪种方式，只要仍在 my-cc-lite `/plan` 流程内，最终都必须调用 plan 阶段脚本。
+
+脚本路径解析：
+
+- 如果当前工作目录存在 `scripts/plan.mjs`，使用：
 
 ```bash
-node "$CLAUDE_PLUGIN_ROOT/scripts/plan.mjs" create-task
+node scripts/plan.mjs create-task
 ```
+
+- 不要使用未确认存在的 `CLAUDE_PLUGIN_ROOT`。
+- 如果当前工作目录不是 my-cc-lite 插件源码目录，先定位插件根目录，再使用绝对路径调用 `<pluginRoot>/scripts/plan.mjs`。
+- 如果无法定位插件根目录，停止并提示用户提供插件根目录；不要尝试调用 `/scripts/plan.mjs`。
 
 ## 状态边界
 
-`/plan` skill 不维护状态判断逻辑。能否创建新计划、项目是否已初始化、是否已有未归档任务，以 `$CLAUDE_PLUGIN_ROOT/scripts/plan.mjs create-task` 的返回为准。
+`/plan` skill 不维护状态判断逻辑。能否创建新计划、项目是否已初始化、是否已有未归档任务，以 plan 阶段脚本的返回为准。
 
 如果脚本返回错误，按错误码给出简短处理建议：
 
@@ -111,18 +119,22 @@ node "$CLAUDE_PLUGIN_ROOT/scripts/plan.mjs" create-task
 1. <work item title>
    - Goal: <这个工作项要达成什么>
    - Scope: <可选，说明这个工作项内做什么、不做什么>
-   - Do: <主要动作>
-   - Check: <完成判断>
+   - Do: <主要动作方向>
+   - Check: <阶段完成判断>
 ```
 
 写作要求：
 
 - 目标、范围、核心方案和验收口径必须清楚。
 - 计划应可读、可调整、可供后续阶段参考。
+- `Plan` 的编号项优先表达主要执行阶段或关键决策面，不默认按文件、组件、命令或局部检查项拆分。
+- 文件、命令和技术细节可以写入 `plan.md`，但应服务于解释方案边界、风险或验收口径；执行时自然会完成的局部动作留到 `/do` 阶段处理。
+- `Plan` 的主要编号项不建议过多。通常小到中等任务超过 8 项时，应先自检是否把文件、组件、命令、检查项或连续实现细节提前拆成了独立工作项。
+- 超过 8 项不是错误；如果这些编号项分别对应明确的功能面、阶段边界、用户取舍或独立验收口径，可以保留。否则应合并为更高层的主要阶段，并把细节放进对应阶段说明或 `Notes`。
+- 当计划开始呈现为长 TODO 列表时，应优先合并为更高层的阶段，并把必要细节压缩到说明或 `Notes` 中。
 - 不写执行状态。
 - 不写 `task.json` 形状。
 - 不写 JSON 或 hidden metadata。
-- 不写文件级 TODO，除非文件落点本身就是计划阶段已确认的范围边界。
 - 不把未确认的业务取舍写成确定结论。
 
 ## 脚本输入

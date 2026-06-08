@@ -1,6 +1,6 @@
 import { mkdir, open, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { StateError, validateProject } from "./schema.mjs";
+import { StateError, validateProject, validateTask } from "./schema.mjs";
 
 const LOCK_RETRY_MS = 50;
 const LOCK_TIMEOUT_MS = 2000;
@@ -94,6 +94,49 @@ export async function writePlan(taskDir, markdown) {
   await writeFile(tempPath, content, "utf8");
   await rename(tempPath, planPath);
   return planPath;
+}
+
+export async function readPlan(taskDir) {
+  const planPath = path.join(taskDir, "plan.md");
+  let content;
+  try {
+    content = await readFile(planPath, "utf8");
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      throw new StateError("PLAN_NOT_FOUND", "Current task is missing plan.md.");
+    }
+    throw error;
+  }
+  if (!content.trim()) {
+    throw new StateError("PLAN_NOT_FOUND", "Current task plan.md is empty.");
+  }
+  return content;
+}
+
+export async function readTask(taskDir) {
+  const taskPath = path.join(taskDir, "task.json");
+  let content;
+  try {
+    content = await readFile(taskPath, "utf8");
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  }
+  try {
+    return validateTask(JSON.parse(content));
+  } catch (error) {
+    if (error instanceof StateError) throw error;
+    throw new StateError("INVALID_TASK_STATE", "task.json is not valid JSON.");
+  }
+}
+
+export async function writeTask(taskDir, task) {
+  validateTask(task);
+  const taskPath = path.join(taskDir, "task.json");
+  const tempPath = `${taskPath}.tmp-${process.pid}-${Date.now()}`;
+  await writeFile(tempPath, `${JSON.stringify(task, null, 2)}\n`, "utf8");
+  await rename(tempPath, taskPath);
+  return taskPath;
 }
 
 export async function withStateLock(projectRoot, fn, options = {}) {
