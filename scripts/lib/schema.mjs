@@ -161,6 +161,20 @@ export function normalizeVerifyCompleteInput(input) {
   };
 }
 
+export function normalizeArchiveInput(input) {
+  if (!isPlainObject(input)) {
+    throw new StateError("INVALID_INPUT", "archive input must be a JSON object.");
+  }
+  for (const key of Object.keys(input)) {
+    if (key !== "summary") {
+      throw new StateError("INVALID_INPUT", `Unsupported archive field: ${key}.`);
+    }
+  }
+  return {
+    summary: normalizeRequiredString(input.summary, "summary")
+  };
+}
+
 export function validateProject(project) {
   if (!isPlainObject(project)) {
     throw new StateError("INVALID_PROJECT_STATE", "project must be a JSON object.");
@@ -284,6 +298,20 @@ export function assertVerifiableTask(task) {
   }
   if (!task.tasks.some((entry) => entry.status === "completed")) {
     throw new StateError("TASK_NOT_VERIFIABLE", "At least one task must be completed before /verify.");
+  }
+  return task;
+}
+
+export function assertArchivableTask(task) {
+  validateTask(task);
+  if (task.status === "archived") {
+    throw new StateError("INVALID_TASK_STATE", "Current task is already archived.");
+  }
+  if (task.stage === "archived") {
+    throw new StateError("INVALID_TASK_STATE", "Current task stage is already archived.");
+  }
+  if (task.archive.archivedAt !== null) {
+    throw new StateError("INVALID_TASK_STATE", "Current task already has archive.archivedAt.");
   }
   return task;
 }

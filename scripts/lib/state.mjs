@@ -1,4 +1,4 @@
-import { mkdir, open, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, open, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { StateError, validateProject, validateTask } from "./schema.mjs";
 
@@ -82,6 +82,26 @@ export async function createTaskDir(projectRoot, taskId) {
     throw error;
   }
   return taskDir;
+}
+
+export function getArchivedTaskDir(projectRoot, taskId) {
+  const { archivedTasksRoot } = statePaths(projectRoot);
+  return path.join(archivedTasksRoot, taskId);
+}
+
+export async function archiveTaskDir(projectRoot, taskId) {
+  const { tasksRoot, archivedTasksRoot } = statePaths(projectRoot);
+  const sourceDir = path.join(tasksRoot, taskId);
+  const archivedDir = getArchivedTaskDir(projectRoot, taskId);
+  await mkdir(archivedTasksRoot, { recursive: true });
+  try {
+    await access(archivedDir);
+    throw new StateError("ARCHIVE_TARGET_EXISTS", `Archived task directory already exists: ${taskId}.`);
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+  await rename(sourceDir, archivedDir);
+  return archivedDir;
 }
 
 export async function writePlan(taskDir, markdown) {

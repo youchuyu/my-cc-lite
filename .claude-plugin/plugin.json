@@ -18,6 +18,7 @@
     "./skills/plan/",
     "./skills/do/",
     "./skills/verify/",
+    "./skills/archive/",
     "./skills/status/"
   ],
   "commands": "./commands/"

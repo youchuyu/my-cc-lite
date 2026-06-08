@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -12,6 +12,7 @@ const initScript = path.join(pluginRoot, "scripts", "init.mjs");
 const planScript = path.join(pluginRoot, "scripts", "plan.mjs");
 const doScript = path.join(pluginRoot, "scripts", "do.mjs");
 const verifyScript = path.join(pluginRoot, "scripts", "verify.mjs");
+const archiveScript = path.join(pluginRoot, "scripts", "archive.mjs");
 const targetDir = await mkdtemp(path.join(os.tmpdir(), "my-cc-lite-init-smoke-"));
 const targetRoot = await realpath(targetDir);
 
@@ -119,6 +120,32 @@ function runVerifyFail(input) {
   return payload.error;
 }
 
+function runArchive(input) {
+  const result = spawnSync(process.execPath, [archiveScript, "archive"], {
+    cwd: targetDir,
+    input,
+    encoding: "utf8"
+  });
+  const payload = parseOutput(result.stdout);
+  if (result.status !== 0) {
+    throw new Error(`archive failed:\n${result.stdout || result.stderr}`);
+  }
+  assert.equal(payload.ok, true);
+  return payload.result;
+}
+
+function runArchiveFail(input) {
+  const result = spawnSync(process.execPath, [archiveScript, "archive"], {
+    cwd: targetDir,
+    input,
+    encoding: "utf8"
+  });
+  const payload = parseOutput(result.stdout);
+  assert.notEqual(result.status, 0, "archive unexpectedly passed");
+  assert.equal(payload.ok, false);
+  return payload.error;
+}
+
 function parseOutput(output) {
   try {
     return JSON.parse(output);
@@ -136,6 +163,13 @@ function wait(ms) {
 }
 
 try {
+  const uninitializedArchiveError = runArchiveFail(
+    JSON.stringify({
+      summary: "Should fail before init."
+    })
+  );
+  assert.equal(uninitializedArchiveError.code, "PROJECT_NOT_INITIALIZED");
+
   const uninitializedVerifyError = runVerifyFail(
     JSON.stringify({
       status: "passed",
@@ -337,6 +371,13 @@ try {
   );
   assert.equal(noActiveVerifyError.code, "NO_ACTIVE_TASK");
 
+  const noActiveArchiveError = runArchiveFail(
+    JSON.stringify({
+      summary: "Should fail without active task."
+    })
+  );
+  assert.equal(noActiveArchiveError.code, "NO_ACTIVE_TASK");
+
   const beforePlanProject = await readFile(path.join(targetDir, ".my-cc-lite", "project.json"), "utf8");
   const planMarkdown = [
     "# Task: pending",
@@ -380,6 +421,13 @@ try {
     })
   );
   assert.equal(missingTaskStateError.code, "TASK_STATE_NOT_FOUND");
+
+  const missingTaskStateArchiveError = runArchiveFail(
+    JSON.stringify({
+      summary: "Should fail before /do materialize."
+    })
+  );
+  assert.equal(missingTaskStateArchiveError.code, "TASK_STATE_NOT_FOUND");
 
   const beforeDoPlan = await readFile(plan.planPath, "utf8");
   const beforeDoProject = await readFile(path.join(targetDir, ".my-cc-lite", "project.json"), "utf8");
@@ -440,6 +488,36 @@ try {
   assert.equal(taskJson.tasks[0].steps[1].title, "Inspect written files");
   assert.equal(await readFile(plan.planPath, "utf8"), beforeDoPlan);
   assert.equal(await readFile(path.join(targetDir, ".my-cc-lite", "project.json"), "utf8"), beforeDoProject);
+
+  const invalidArchiveInputError = runArchiveFail(
+    JSON.stringify({
+      summary: " "
+    })
+  );
+  assert.equal(invalidArchiveInputError.code, "INVALID_INPUT");
+  assert.equal(JSON.parse(await readFile(materialized.taskPath, "utf8")).archive.archivedAt, null);
+
+  await rm(plan.planPath, { force: true });
+  const missingPlanArchiveError = runArchiveFail(
+    JSON.stringify({
+      summary: "Should fail when plan.md is missing."
+    })
+  );
+  assert.equal(missingPlanArchiveError.code, "PLAN_NOT_FOUND");
+  await writeFile(plan.planPath, beforeDoPlan, "utf8");
+
+  const archiveTargetDir = path.join(targetDir, ".my-cc-lite", "archived_tasks", plan.taskId);
+  await mkdir(archiveTargetDir, { recursive: true });
+  await writeFile(path.join(archiveTargetDir, "sentinel.txt"), "keep me", "utf8");
+  const archiveTargetExistsError = runArchiveFail(
+    JSON.stringify({
+      summary: "Should fail when the archive target already exists."
+    })
+  );
+  assert.equal(archiveTargetExistsError.code, "ARCHIVE_TARGET_EXISTS");
+  assert.equal(await readFile(path.join(archiveTargetDir, "sentinel.txt"), "utf8"), "keep me");
+  assert.equal(JSON.parse(await readFile(materialized.taskPath, "utf8")).archive.archivedAt, null);
+  await rm(archiveTargetDir, { recursive: true, force: true });
 
   const pendingVerifyError = runVerifyFail(
     JSON.stringify({
@@ -720,8 +798,9 @@ try {
     ["T1", "T2", "T3", "R1", "R2"]
   );
 
-  afterBlockedTaskJson.verification.status = "legacy";
-  await writeFile(materialized.taskPath, `${JSON.stringify(afterBlockedTaskJson, null, 2)}\n`, "utf8");
+  const invalidVerificationTaskJson = structuredClone(afterBlockedTaskJson);
+  invalidVerificationTaskJson.verification.status = "legacy";
+  await writeFile(materialized.taskPath, `${JSON.stringify(invalidVerificationTaskJson, null, 2)}\n`, "utf8");
   const invalidVerificationStatusError = runVerifyFail(
     JSON.stringify({
       status: "passed",
@@ -729,6 +808,7 @@ try {
     })
   );
   assert.equal(invalidVerificationStatusError.code, "INVALID_TASK_STATE");
+  await writeFile(materialized.taskPath, `${JSON.stringify(afterBlockedTaskJson, null, 2)}\n`, "utf8");
 
   const activeTaskError = runPlanFail(
     JSON.stringify({
@@ -747,6 +827,53 @@ try {
     })
   );
   assert.equal(multipleActiveError.code, "MULTIPLE_ACTIVE_TASKS");
+  await rm(path.join(targetDir, ".my-cc-lite", "tasks", "manual-extra-task"), { recursive: true, force: true });
+
+  const mismatchedTaskJson = JSON.parse(await readFile(materialized.taskPath, "utf8"));
+  mismatchedTaskJson.taskId = "mismatched-task-id";
+  await writeFile(materialized.taskPath, `${JSON.stringify(mismatchedTaskJson, null, 2)}\n`, "utf8");
+  const mismatchedTaskIdArchiveError = runArchiveFail(
+    JSON.stringify({
+      summary: "Should fail when taskId does not match the directory."
+    })
+  );
+  assert.equal(mismatchedTaskIdArchiveError.code, "INVALID_TASK_STATE");
+  assert.equal(existsSync(path.join(targetDir, ".my-cc-lite", "tasks", plan.taskId)), true);
+  assert.equal(existsSync(path.join(targetDir, ".my-cc-lite", "archived_tasks", plan.taskId)), false);
+  await writeFile(materialized.taskPath, `${JSON.stringify(afterBlockedTaskJson, null, 2)}\n`, "utf8");
+
+  const beforeArchiveProject = await readFile(path.join(targetDir, ".my-cc-lite", "project.json"), "utf8");
+  const beforeArchivePlan = await readFile(plan.planPath, "utf8");
+  const beforeArchiveTaskJson = JSON.parse(await readFile(materialized.taskPath, "utf8"));
+  const archived = runArchive(
+    JSON.stringify({
+      summary: "Archived the blocked smoke task to close the current task."
+    })
+  );
+  const archivedDir = path.join(targetRoot, ".my-cc-lite", "archived_tasks", plan.taskId);
+  assert.equal(archived.taskId, plan.taskId);
+  assert.equal(archived.archivedDir, archivedDir);
+  assert.equal(archived.taskPath, path.join(archivedDir, "task.json"));
+  assert.equal(archived.planPath, path.join(archivedDir, "plan.md"));
+  assert.equal(archived.status, "archived");
+  assert.equal(archived.stage, "archived");
+  assert.equal(archived.verification.status, "blocked");
+  assert.equal(archived.archive.summary, "Archived the blocked smoke task to close the current task.");
+  assert.equal(existsSync(path.join(targetDir, ".my-cc-lite", "tasks", plan.taskId)), false);
+  assert.equal(existsSync(archivedDir), true);
+  assert.deepEqual(await readdir(path.join(targetDir, ".my-cc-lite", "tasks")), []);
+  const archivedTaskJson = JSON.parse(await readFile(path.join(archivedDir, "task.json"), "utf8"));
+  assert.equal(archivedTaskJson.status, "archived");
+  assert.equal(archivedTaskJson.stage, "archived");
+  assert.equal(archivedTaskJson.archive.summary, "Archived the blocked smoke task to close the current task.");
+  assert.equal(typeof archivedTaskJson.archive.archivedAt, "string");
+  assert.deepEqual(archivedTaskJson.verification, beforeArchiveTaskJson.verification);
+  assert.deepEqual(archivedTaskJson.tasks, beforeArchiveTaskJson.tasks);
+  assert.equal(await readFile(path.join(archivedDir, "plan.md"), "utf8"), beforeArchivePlan);
+  assert.equal(await readFile(path.join(targetDir, ".my-cc-lite", "project.json"), "utf8"), beforeArchiveProject);
+  for (const unexpected of ["archive.md", "changed-files.json", "events.jsonl", "commands.jsonl"]) {
+    assert.equal(existsSync(path.join(archivedDir, unexpected)), false, `${unexpected} should not be generated`);
+  }
 
   process.stdout.write(`smoke passed: ${targetDir}\n`);
 } finally {
