@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -11,6 +11,7 @@ const pluginRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".
 const initScript = path.join(pluginRoot, "scripts", "init.mjs");
 const planScript = path.join(pluginRoot, "scripts", "plan.mjs");
 const doScript = path.join(pluginRoot, "scripts", "do.mjs");
+const verifyScript = path.join(pluginRoot, "scripts", "verify.mjs");
 const targetDir = await mkdtemp(path.join(os.tmpdir(), "my-cc-lite-init-smoke-"));
 const targetRoot = await realpath(targetDir);
 
@@ -92,6 +93,32 @@ function runDoFail(command, input) {
   return payload.error;
 }
 
+function runVerify(input) {
+  const result = spawnSync(process.execPath, [verifyScript, "complete"], {
+    cwd: targetDir,
+    input,
+    encoding: "utf8"
+  });
+  const payload = parseOutput(result.stdout);
+  if (result.status !== 0) {
+    throw new Error(`verify complete failed:\n${result.stdout || result.stderr}`);
+  }
+  assert.equal(payload.ok, true);
+  return payload.result;
+}
+
+function runVerifyFail(input) {
+  const result = spawnSync(process.execPath, [verifyScript, "complete"], {
+    cwd: targetDir,
+    input,
+    encoding: "utf8"
+  });
+  const payload = parseOutput(result.stdout);
+  assert.notEqual(result.status, 0, "verify complete unexpectedly passed");
+  assert.equal(payload.ok, false);
+  return payload.error;
+}
+
 function parseOutput(output) {
   try {
     return JSON.parse(output);
@@ -109,6 +136,14 @@ function wait(ms) {
 }
 
 try {
+  const uninitializedVerifyError = runVerifyFail(
+    JSON.stringify({
+      status: "passed",
+      summary: "Should fail before init."
+    })
+  );
+  assert.equal(uninitializedVerifyError.code, "PROJECT_NOT_INITIALIZED");
+
   const uninitializedDoError = runDoFail(
     "materialize",
     JSON.stringify({
@@ -294,6 +329,14 @@ try {
   );
   assert.equal(noActiveTaskError.code, "NO_ACTIVE_TASK");
 
+  const noActiveVerifyError = runVerifyFail(
+    JSON.stringify({
+      status: "passed",
+      summary: "Should fail without active task."
+    })
+  );
+  assert.equal(noActiveVerifyError.code, "NO_ACTIVE_TASK");
+
   const beforePlanProject = await readFile(path.join(targetDir, ".my-cc-lite", "project.json"), "utf8");
   const planMarkdown = [
     "# Task: pending",
@@ -329,6 +372,14 @@ try {
   assert.equal(await readFile(plan.planPath, "utf8"), `${planMarkdown}\n`);
   assert.equal(existsSync(path.join(plan.taskDir, "task.json")), false);
   assert.equal(await readFile(path.join(targetDir, ".my-cc-lite", "project.json"), "utf8"), beforePlanProject);
+
+  const missingTaskStateError = runVerifyFail(
+    JSON.stringify({
+      status: "passed",
+      summary: "Should fail before /do materialize."
+    })
+  );
+  assert.equal(missingTaskStateError.code, "TASK_STATE_NOT_FOUND");
 
   const beforeDoPlan = await readFile(plan.planPath, "utf8");
   const beforeDoProject = await readFile(path.join(targetDir, ".my-cc-lite", "project.json"), "utf8");
@@ -389,6 +440,17 @@ try {
   assert.equal(taskJson.tasks[0].steps[1].title, "Inspect written files");
   assert.equal(await readFile(plan.planPath, "utf8"), beforeDoPlan);
   assert.equal(await readFile(path.join(targetDir, ".my-cc-lite", "project.json"), "utf8"), beforeDoProject);
+
+  const pendingVerifyError = runVerifyFail(
+    JSON.stringify({
+      status: "passed",
+      summary: "Should fail while tasks are still pending."
+    })
+  );
+  assert.equal(pendingVerifyError.code, "TASK_NOT_VERIFIABLE");
+  const afterPendingVerifyTaskJson = JSON.parse(await readFile(materialized.taskPath, "utf8"));
+  assert.equal(afterPendingVerifyTaskJson.verification.status, "not_started");
+  assert.equal(afterPendingVerifyTaskJson.status, "active");
 
   const materializeAgainError = runDoFail(
     "materialize",
@@ -510,6 +572,163 @@ try {
   assert.equal(afterDoTaskJson.verification.status, "not_started");
   assert.equal(await readFile(plan.planPath, "utf8"), beforeDoPlan);
   assert.equal(await readFile(path.join(targetDir, ".my-cc-lite", "project.json"), "utf8"), beforeDoProject);
+
+  const beforeVerifyProject = await readFile(path.join(targetDir, ".my-cc-lite", "project.json"), "utf8");
+  const beforeVerifyPlan = await readFile(plan.planPath, "utf8");
+  const passed = runVerify(
+    JSON.stringify({
+      status: "passed",
+      summary: "The smoke task satisfies plan.md."
+    })
+  );
+  assert.equal(passed.status, "verified");
+  assert.equal(passed.stage, "verified");
+  assert.equal(passed.verification.status, "passed");
+  assert.equal(passed.verification.summary, "The smoke task satisfies plan.md.");
+  assert.deepEqual(
+    passed.tasks.map((task) => [task.id, task.status]),
+    [
+      ["T1", "completed"],
+      ["T2", "completed"],
+      ["T3", "skipped"]
+    ]
+  );
+  const afterPassedTaskJson = JSON.parse(await readFile(materialized.taskPath, "utf8"));
+  assert.equal(afterPassedTaskJson.status, "verified");
+  assert.equal(afterPassedTaskJson.stage, "verified");
+  assert.equal(afterPassedTaskJson.verification.status, "passed");
+  assert.equal(afterPassedTaskJson.tasks.length, 3);
+  assert.equal(await readFile(plan.planPath, "utf8"), beforeVerifyPlan);
+  assert.equal(await readFile(path.join(targetDir, ".my-cc-lite", "project.json"), "utf8"), beforeVerifyProject);
+
+  const invalidRepairOnPassedError = runVerifyFail(
+    JSON.stringify({
+      status: "passed",
+      summary: "Repair tasks are not allowed for passed.",
+      repairTasks: [
+        {
+          title: "Invalid repair",
+          steps: [],
+          checks: []
+        }
+      ]
+    })
+  );
+  assert.equal(invalidRepairOnPassedError.code, "INVALID_INPUT");
+  assert.equal(JSON.parse(await readFile(materialized.taskPath, "utf8")).tasks.length, 3);
+
+  const needsFix = runVerify(
+    JSON.stringify({
+      status: "needs_fix",
+      summary: "Added R1 for the missing final smoke check before retrying /verify.",
+      repairTasks: [
+        {
+          title: "Fix verification issue: missing final smoke check",
+          steps: ["Run the final smoke check required by plan.md"],
+          checks: ["The final smoke check has been run"]
+        }
+      ]
+    })
+  );
+  assert.equal(needsFix.status, "active");
+  assert.equal(needsFix.stage, "executing");
+  assert.equal(needsFix.verification.status, "needs_fix");
+  assert.deepEqual(
+    needsFix.tasks.map((task) => [task.id, task.status]),
+    [
+      ["T1", "completed"],
+      ["T2", "completed"],
+      ["T3", "skipped"],
+      ["R1", "pending"]
+    ]
+  );
+  const afterNeedsFixTaskJson = JSON.parse(await readFile(materialized.taskPath, "utf8"));
+  assert.equal(afterNeedsFixTaskJson.tasks[3].id, "R1");
+  assert.equal(afterNeedsFixTaskJson.tasks[3].title, "Fix verification issue: missing final smoke check");
+  assert.equal(afterNeedsFixTaskJson.tasks[3].status, "pending");
+  assert.equal(afterNeedsFixTaskJson.tasks[3].statusReason, "");
+  assert.equal(afterNeedsFixTaskJson.tasks[0].title, "Create the plan artifact");
+  assert.equal(await readFile(plan.planPath, "utf8"), beforeVerifyPlan);
+  assert.equal(await readFile(path.join(targetDir, ".my-cc-lite", "project.json"), "utf8"), beforeVerifyProject);
+
+  const needsFixWithPendingRepairError = runVerifyFail(
+    JSON.stringify({
+      status: "needs_fix",
+      summary: "Should fail while R1 is pending.",
+      repairTasks: [
+        {
+          title: "Invalid second repair",
+          steps: [],
+          checks: []
+        }
+      ]
+    })
+  );
+  assert.equal(needsFixWithPendingRepairError.code, "TASK_NOT_VERIFIABLE");
+
+  const completedRepair = runDo(
+    "update-task",
+    JSON.stringify({
+      id: "R1",
+      status: "completed",
+      statusReason: ""
+    })
+  );
+  assert.equal(completedRepair.status, "active");
+  assert.equal(completedRepair.task.status, "completed");
+
+  const secondNeedsFix = runVerify(
+    JSON.stringify({
+      status: "needs_fix",
+      summary: "Added R2 for the second bounded verification gap.",
+      repairTasks: [
+        {
+          title: "Fix verification issue: second bounded gap",
+          steps: ["Handle the second bounded verification gap"],
+          checks: ["The second bounded verification gap is handled"]
+        }
+      ]
+    })
+  );
+  assert.equal(secondNeedsFix.tasks.at(-1).id, "R2");
+  assert.equal(secondNeedsFix.tasks.at(-1).status, "pending");
+
+  runDo(
+    "update-task",
+    JSON.stringify({
+      id: "R2",
+      status: "completed",
+      statusReason: ""
+    })
+  );
+  const beforeBlockedTaskJson = JSON.parse(await readFile(materialized.taskPath, "utf8"));
+  const blockedVerify = runVerify(
+    JSON.stringify({
+      status: "blocked",
+      summary: "Verification is blocked by an unresolved acceptance decision."
+    })
+  );
+  assert.equal(blockedVerify.status, "blocked");
+  assert.equal(blockedVerify.stage, "verifying");
+  assert.equal(blockedVerify.verification.status, "blocked");
+  assert.equal(blockedVerify.verification.summary, "Verification is blocked by an unresolved acceptance decision.");
+  assert.equal(blockedVerify.tasks.length, beforeBlockedTaskJson.tasks.length);
+  const afterBlockedTaskJson = JSON.parse(await readFile(materialized.taskPath, "utf8"));
+  assert.equal(afterBlockedTaskJson.tasks.length, beforeBlockedTaskJson.tasks.length);
+  assert.deepEqual(
+    afterBlockedTaskJson.tasks.map((task) => task.id),
+    ["T1", "T2", "T3", "R1", "R2"]
+  );
+
+  afterBlockedTaskJson.verification.status = "legacy";
+  await writeFile(materialized.taskPath, `${JSON.stringify(afterBlockedTaskJson, null, 2)}\n`, "utf8");
+  const invalidVerificationStatusError = runVerifyFail(
+    JSON.stringify({
+      status: "passed",
+      summary: "Should fail when task.json has invalid verification status."
+    })
+  );
+  assert.equal(invalidVerificationStatusError.code, "INVALID_TASK_STATE");
 
   const activeTaskError = runPlanFail(
     JSON.stringify({

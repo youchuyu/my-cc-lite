@@ -3,6 +3,7 @@ const HELPER_TYPES = new Set(["skill", "agent", "tool"]);
 const TASK_STATUSES = new Set(["pending", "in_progress", "completed", "failed", "blocked", "skipped"]);
 const TOP_LEVEL_TASK_STATUSES = new Set(["active", "blocked", "verified", "archived"]);
 const TASK_STAGES = new Set(["executing", "verifying", "verified", "archived"]);
+const VERIFICATION_STATUSES = new Set(["not_started", "passed", "needs_fix", "blocked"]);
 const DENYLIST = new Set(
   [
     "Bash",
@@ -126,6 +127,40 @@ export function normalizeDoTaskPatch(input) {
   };
 }
 
+export function normalizeVerifyCompleteInput(input) {
+  if (!isPlainObject(input)) {
+    throw new StateError("INVALID_INPUT", "complete input must be a JSON object.");
+  }
+  for (const key of Object.keys(input)) {
+    if (!["status", "summary", "repairTasks"].includes(key)) {
+      throw new StateError("INVALID_INPUT", `Unsupported complete field: ${key}.`);
+    }
+  }
+  const status = normalizeRequiredString(input.status, "status");
+  if (!["passed", "needs_fix", "blocked"].includes(status)) {
+    throw new StateError("INVALID_INPUT", "status must be one of: passed, needs_fix, blocked.");
+  }
+  const summary = normalizeRequiredString(input.summary, "summary");
+  if (status === "needs_fix") {
+    if (!Array.isArray(input.repairTasks) || input.repairTasks.length === 0) {
+      throw new StateError("INVALID_INPUT", "repairTasks must be a non-empty array when status is needs_fix.");
+    }
+    return {
+      status,
+      summary,
+      repairTasks: input.repairTasks.map(normalizeRepairTaskInput)
+    };
+  }
+  if (Object.hasOwn(input, "repairTasks")) {
+    throw new StateError("INVALID_INPUT", "repairTasks is only supported when status is needs_fix.");
+  }
+  return {
+    status,
+    summary,
+    repairTasks: []
+  };
+}
+
 export function validateProject(project) {
   if (!isPlainObject(project)) {
     throw new StateError("INVALID_PROJECT_STATE", "project must be a JSON object.");
@@ -171,7 +206,13 @@ export function validateTask(task) {
   if (!isPlainObject(task.verification)) {
     throw new StateError("INVALID_TASK_STATE", "verification must be a JSON object.");
   }
-  normalizeRequiredString(task.verification.status, "verification.status", "INVALID_TASK_STATE");
+  const verificationStatus = normalizeRequiredString(task.verification.status, "verification.status", "INVALID_TASK_STATE");
+  if (!VERIFICATION_STATUSES.has(verificationStatus)) {
+    throw new StateError(
+      "INVALID_TASK_STATE",
+      `verification.status must be one of: ${[...VERIFICATION_STATUSES].join(", ")}.`
+    );
+  }
   if (typeof task.verification.summary !== "string") {
     throw new StateError("INVALID_TASK_STATE", "verification.summary must be a string.");
   }
@@ -214,12 +255,37 @@ export function summarizeTask(task) {
   };
 }
 
+export function summarizeVerification(task) {
+  return {
+    status: task.verification.status,
+    summary: task.verification.summary
+  };
+}
+
 export function assertInitializedProject(project) {
   if (!project) {
     throw new StateError("PROJECT_NOT_INITIALIZED", "Project is not initialized. Run /init before /plan.");
   }
   validateProject(project);
   return project;
+}
+
+export function assertVerifiableTask(task) {
+  validateTask(task);
+  if (task.tasks.length === 0) {
+    throw new StateError("TASK_NOT_VERIFIABLE", "task.json tasks must be non-empty before /verify.");
+  }
+  const unfinished = task.tasks.find((entry) => !["completed", "skipped"].includes(entry.status));
+  if (unfinished) {
+    throw new StateError(
+      "TASK_NOT_VERIFIABLE",
+      `Task ${unfinished.id} is ${unfinished.status}. Return to /do before /verify.`
+    );
+  }
+  if (!task.tasks.some((entry) => entry.status === "completed")) {
+    throw new StateError("TASK_NOT_VERIFIABLE", "At least one task must be completed before /verify.");
+  }
+  return task;
 }
 
 export function assertNoActiveTask(activeTaskDirs) {
@@ -234,6 +300,22 @@ export function assertNoActiveTask(activeTaskDirs) {
     );
   }
   throw new StateError("MULTIPLE_ACTIVE_TASKS", "Multiple active task directories exist.");
+}
+
+function normalizeRepairTaskInput(entry, index) {
+  if (!isPlainObject(entry)) {
+    throw new StateError("INVALID_INPUT", "repair task must be a JSON object.");
+  }
+  for (const key of Object.keys(entry)) {
+    if (!["title", "steps", "checks"].includes(key)) {
+      throw new StateError("INVALID_INPUT", `Unsupported repairTasks[${index}] field: ${key}.`);
+    }
+  }
+  return {
+    title: normalizeRequiredString(entry.title, `repairTasks[${index}].title`),
+    steps: validateSteps(entry.steps ?? [], "INVALID_INPUT"),
+    checks: validateChecks(entry.checks ?? [], "INVALID_INPUT")
+  };
 }
 
 export function filterStageHelpers(stageHelpers) {
