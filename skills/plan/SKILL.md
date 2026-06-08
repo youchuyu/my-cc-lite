@@ -13,7 +13,7 @@ description: 收敛任务方案并创建 my-cc-lite plan.md
 
 当用户手动调用 `/plan`，或明确要求用 my-cc-lite 创建新任务计划时使用。
 
-如果用户只是想普通讨论方案、不想创建 my-cc-lite 任务，不要调用 `scripts/plan.mjs create-task`。
+如果用户只是想普通讨论方案、不想创建 my-cc-lite 任务，不要调用 `scripts/run.mjs plan create-task`。
 
 ## 执行步骤
 
@@ -49,17 +49,22 @@ description: 收敛任务方案并创建 my-cc-lite plan.md
 - 计划生成方式只影响本次对话协作，不写入 my-cc-lite 状态。
 - 无论用户选择哪种方式，只要仍在 my-cc-lite `/plan` 流程内，最终都必须调用 plan 阶段脚本。
 
-脚本路径解析：
+脚本调用统一使用 my-cc-lite runtime entry：
 
-- 如果当前工作目录存在 `scripts/plan.mjs`，使用：
+- 如果当前工作目录存在 `scripts/run.mjs`，使用：
 
 ```bash
-node scripts/plan.mjs create-task
+node scripts/run.mjs plan create-task
 ```
 
-- 不要使用未确认存在的 `CLAUDE_PLUGIN_ROOT`。
-- 如果当前工作目录不是 my-cc-lite 插件源码目录，先定位插件根目录，再使用绝对路径调用 `<pluginRoot>/scripts/plan.mjs`。
-- 如果无法定位插件根目录，停止并提示用户提供插件根目录；不要尝试调用 `/scripts/plan.mjs`。
+- 否则先定位 my-cc-lite 插件根目录，使用：
+
+```bash
+node <pluginRoot>/scripts/run.mjs plan create-task
+```
+
+- 调用命令时不得切换到插件根目录；当前工作目录必须保持为目标项目根目录。
+- 如果无法定位插件根目录，停止并提示用户提供插件根目录；不要尝试调用 `/scripts/run.mjs`。
 
 ## 状态边界
 

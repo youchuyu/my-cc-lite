@@ -35,6 +35,7 @@ scripts/
     state.mjs
     schema.mjs
     format.mjs
+  run.mjs
   init.mjs
   plan.mjs
   do.mjs
@@ -44,6 +45,21 @@ scripts/
 ```
 
 阶段入口按生命周期拆开，公共状态能力集中在 `scripts/lib/`。这样每个阶段脚本的职责清晰，同时避免路径扫描、锁、JSON 读写和校验逻辑散落到多个文件中。
+
+`scripts/run.mjs` 是 skill 推荐使用的统一入口。它只负责从 my-cc-lite 插件根目录分发到对应阶段脚本，不理解业务状态，也不改变当前工作目录。
+
+统一入口命令：
+
+```text
+node scripts/run.mjs init init-project
+node scripts/run.mjs plan create-task
+node scripts/run.mjs do materialize
+node scripts/run.mjs do update-task
+node scripts/run.mjs verify complete
+node scripts/run.mjs archive archive
+```
+
+如果当前工作目录不是插件源码目录，skill 应先定位插件根目录，再调用 `node <pluginRoot>/scripts/run.mjs <stage> <command>`。调用时不得切换到插件根目录；`process.cwd()` 必须保持为目标项目根目录，所有 `.my-cc-lite/` 状态都从当前工作目录解析。
 
 ## 公共模块
 
@@ -203,8 +219,8 @@ renderPlanMarkdown(input)
 建议提供两个子命令：
 
 ```text
-node scripts/do.mjs materialize
-node scripts/do.mjs update-task
+node scripts/run.mjs do materialize
+node scripts/run.mjs do update-task
 ```
 
 `materialize` 输入：
@@ -365,7 +381,7 @@ node scripts/do.mjs update-task
 示例：
 
 ```bash
-node scripts/plan.mjs < /tmp/my-cc-lite-plan-input.json
+node scripts/run.mjs plan create-task < /tmp/my-cc-lite-plan-input.json
 ```
 
 所有阶段入口统一向 `stdout` 输出 JSON。

@@ -8,20 +8,21 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const pluginRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const initScript = path.join(pluginRoot, "scripts", "init.mjs");
+const runScript = path.join(pluginRoot, "scripts", "run.mjs");
 const planScript = path.join(pluginRoot, "scripts", "plan.mjs");
-const doScript = path.join(pluginRoot, "scripts", "do.mjs");
-const verifyScript = path.join(pluginRoot, "scripts", "verify.mjs");
-const archiveScript = path.join(pluginRoot, "scripts", "archive.mjs");
 const targetDir = await mkdtemp(path.join(os.tmpdir(), "my-cc-lite-init-smoke-"));
 const targetRoot = await realpath(targetDir);
 
-function runInit(input) {
-  const result = spawnSync(process.execPath, [initScript, "init-project"], {
+function runStage(stage, command, input) {
+  return spawnSync(process.execPath, [runScript, stage, command], {
     cwd: targetDir,
     input,
     encoding: "utf8"
   });
+}
+
+function runInit(input) {
+  const result = runStage("init", "init-project", input);
   const payload = parseOutput(result.stdout);
   if (result.status !== 0) {
     throw new Error(`init-project failed:\n${result.stdout || result.stderr}`);
@@ -31,11 +32,7 @@ function runInit(input) {
 }
 
 function runInitFail(input) {
-  const result = spawnSync(process.execPath, [initScript, "init-project"], {
-    cwd: targetDir,
-    input,
-    encoding: "utf8"
-  });
+  const result = runStage("init", "init-project", input);
   const payload = parseOutput(result.stdout);
   assert.notEqual(result.status, 0, "init-project unexpectedly passed");
   assert.equal(payload.ok, false);
@@ -43,11 +40,7 @@ function runInitFail(input) {
 }
 
 function runPlan(input) {
-  const result = spawnSync(process.execPath, [planScript, "create-task"], {
-    cwd: targetDir,
-    input,
-    encoding: "utf8"
-  });
+  const result = runStage("plan", "create-task", input);
   const payload = parseOutput(result.stdout);
   if (result.status !== 0) {
     throw new Error(`create-task failed:\n${result.stdout || result.stderr}`);
@@ -57,11 +50,7 @@ function runPlan(input) {
 }
 
 function runPlanFail(input) {
-  const result = spawnSync(process.execPath, [planScript, "create-task"], {
-    cwd: targetDir,
-    input,
-    encoding: "utf8"
-  });
+  const result = runStage("plan", "create-task", input);
   const payload = parseOutput(result.stdout);
   assert.notEqual(result.status, 0, "create-task unexpectedly passed");
   assert.equal(payload.ok, false);
@@ -69,11 +58,7 @@ function runPlanFail(input) {
 }
 
 function runDo(command, input) {
-  const result = spawnSync(process.execPath, [doScript, command], {
-    cwd: targetDir,
-    input,
-    encoding: "utf8"
-  });
+  const result = runStage("do", command, input);
   const payload = parseOutput(result.stdout);
   if (result.status !== 0) {
     throw new Error(`${command} failed:\n${result.stdout || result.stderr}`);
@@ -83,11 +68,7 @@ function runDo(command, input) {
 }
 
 function runDoFail(command, input) {
-  const result = spawnSync(process.execPath, [doScript, command], {
-    cwd: targetDir,
-    input,
-    encoding: "utf8"
-  });
+  const result = runStage("do", command, input);
   const payload = parseOutput(result.stdout);
   assert.notEqual(result.status, 0, `${command} unexpectedly passed`);
   assert.equal(payload.ok, false);
@@ -95,11 +76,7 @@ function runDoFail(command, input) {
 }
 
 function runVerify(input) {
-  const result = spawnSync(process.execPath, [verifyScript, "complete"], {
-    cwd: targetDir,
-    input,
-    encoding: "utf8"
-  });
+  const result = runStage("verify", "complete", input);
   const payload = parseOutput(result.stdout);
   if (result.status !== 0) {
     throw new Error(`verify complete failed:\n${result.stdout || result.stderr}`);
@@ -109,11 +86,7 @@ function runVerify(input) {
 }
 
 function runVerifyFail(input) {
-  const result = spawnSync(process.execPath, [verifyScript, "complete"], {
-    cwd: targetDir,
-    input,
-    encoding: "utf8"
-  });
+  const result = runStage("verify", "complete", input);
   const payload = parseOutput(result.stdout);
   assert.notEqual(result.status, 0, "verify complete unexpectedly passed");
   assert.equal(payload.ok, false);
@@ -121,11 +94,7 @@ function runVerifyFail(input) {
 }
 
 function runArchive(input) {
-  const result = spawnSync(process.execPath, [archiveScript, "archive"], {
-    cwd: targetDir,
-    input,
-    encoding: "utf8"
-  });
+  const result = runStage("archive", "archive", input);
   const payload = parseOutput(result.stdout);
   if (result.status !== 0) {
     throw new Error(`archive failed:\n${result.stdout || result.stderr}`);
@@ -135,11 +104,7 @@ function runArchive(input) {
 }
 
 function runArchiveFail(input) {
-  const result = spawnSync(process.execPath, [archiveScript, "archive"], {
-    cwd: targetDir,
-    input,
-    encoding: "utf8"
-  });
+  const result = runStage("archive", "archive", input);
   const payload = parseOutput(result.stdout);
   assert.notEqual(result.status, 0, "archive unexpectedly passed");
   assert.equal(payload.ok, false);
@@ -163,6 +128,29 @@ function wait(ms) {
 }
 
 try {
+  const runHelp = spawnSync(process.execPath, [runScript, "--help"], {
+    cwd: targetDir,
+    encoding: "utf8"
+  });
+  assert.equal(runHelp.status, 0);
+  assert.match(runHelp.stdout, /node scripts\/run\.mjs plan create-task/);
+
+  const invalidStage = spawnSync(process.execPath, [runScript, "missing", "command"], {
+    cwd: targetDir,
+    encoding: "utf8"
+  });
+  const invalidStagePayload = parseOutput(invalidStage.stdout);
+  assert.notEqual(invalidStage.status, 0);
+  assert.equal(invalidStagePayload.ok, false);
+  assert.equal(invalidStagePayload.error.code, "INVALID_INPUT");
+
+  const directPlanHelp = spawnSync(process.execPath, [planScript, "--help"], {
+    cwd: targetDir,
+    encoding: "utf8"
+  });
+  assert.equal(directPlanHelp.status, 0);
+  assert.match(directPlanHelp.stdout, /node scripts\/plan\.mjs create-task/);
+
   const uninitializedArchiveError = runArchiveFail(
     JSON.stringify({
       summary: "Should fail before init."

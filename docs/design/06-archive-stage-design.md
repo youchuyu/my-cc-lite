@@ -147,7 +147,7 @@ Archived while verification was blocked because the task is no longer being purs
 5. 查看 `verification.status`、顶层 `status` 和顶层 `stage`。
 6. 如果任务未验证通过，确认用户是否确实要关闭未完成任务。
 7. 基于 `plan.md`、`task.json.objective`、`verification.summary` 和当前状态生成短 `archive.summary`。
-8. 调用 `scripts/archive.mjs archive` 写入归档字段并移动目录。
+8. 调用 `scripts/run.mjs archive archive` 写入归档字段并移动目录。
 9. 在对话中返回归档路径、验证状态和简短摘要。
 
 `/archive` 不需要委派专门 agent。归档摘要不需要模型做复杂判断，只需要从已有状态归纳一句到几句短文本。
@@ -157,7 +157,7 @@ Archived while verification was blocked because the task is no longer being purs
 `archive.mjs` 对应 `/archive` 的确定性状态入口。建议命令：
 
 ```text
-node scripts/archive.mjs archive
+node scripts/run.mjs archive archive
 ```
 
 输入：
@@ -289,7 +289,7 @@ type ArchiveInput = {
 - 根据当前验证状态提示用户归档语义。
 - 在未验证通过时确认用户是否仍要关闭任务。
 - 生成短 `archive.summary`。
-- 调用 `scripts/archive.mjs archive`。
+- 调用 `scripts/run.mjs archive archive`。
 - 返回归档路径、验证状态和下一步状态。
 
 它不负责：

@@ -5,7 +5,7 @@ description: 关闭当前 my-cc-lite 任务并移动到 archived_tasks
 
 # Archive
 
-`/archive` 是 my-cc-lite 的任务关闭阶段。它只把唯一 active task 从 `.my-cc-lite/tasks/<taskId>/` 移动到 `.my-cc-lite/archived_tasks/<taskId>/`，并通过 `scripts/archive.mjs` 在移动前写入最小归档摘要。
+`/archive` 是 my-cc-lite 的任务关闭阶段。它只把唯一 active task 从 `.my-cc-lite/tasks/<taskId>/` 移动到 `.my-cc-lite/archived_tasks/<taskId>/`，并通过 my-cc-lite runtime entry 在移动前写入最小归档摘要。
 
 `/archive` 不重新验证任务，不执行修复，不生成报告，不更新 `project.json`，不自动创建新任务。
 
@@ -61,16 +61,22 @@ description: 关闭当前 my-cc-lite 任务并移动到 archived_tasks
 
 ## 脚本输入
 
-脚本路径解析：
+脚本调用统一使用 my-cc-lite runtime entry：
 
-- 如果当前工作目录存在 `scripts/archive.mjs`，使用：
+- 如果当前工作目录存在 `scripts/run.mjs`，使用：
 
 ```bash
-node scripts/archive.mjs archive
+node scripts/run.mjs archive archive
 ```
 
-- 如果当前工作目录不是 my-cc-lite 插件源码目录，先定位插件根目录，再使用绝对路径调用 `<pluginRoot>/scripts/archive.mjs`。
-- 如果无法定位插件根目录，停止并提示用户提供插件根目录；不要尝试调用 `/scripts/archive.mjs`。
+- 否则先定位 my-cc-lite 插件根目录，使用：
+
+```bash
+node <pluginRoot>/scripts/run.mjs archive archive
+```
+
+- 调用命令时不得切换到插件根目录；当前工作目录必须保持为目标项目根目录。
+- 如果无法定位插件根目录，停止并提示用户提供插件根目录；不要尝试调用 `/scripts/run.mjs`。
 
 脚本输入 JSON：
 

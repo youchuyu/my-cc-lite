@@ -74,7 +74,7 @@
 5. 如果 `task.json` 不存在，执行首次物化。
 6. 选择下一个可执行 task。
 7. 确定本次执行方式。
-8. 调用 `scripts/do.mjs update-task` 将该 task 标记为 `in_progress`。
+8. 调用 `scripts/run.mjs do update-task` 将该 task 标记为 `in_progress`。
 9. 按已选执行方式执行当前 task。
 10. 执行完成后，委派 `verifier` 的 `task_review` mode，或由 `/do` skill 自行做局部检查。
 11. 根据执行和局部检查结果，将该 task 标记为 `completed`、`blocked` 或 `failed`。
@@ -220,7 +220,7 @@ skipped
 
 `/do` skill 统一负责判断本次调用是首次物化还是后续执行、从 `plan.md` 生成首次 `tasks[]`、循环选择可执行 task、调用阶段脚本写入状态，并根据 executor、verifier 或 debugger 返回结果决定 task 状态。
 
-`/do` 阶段的状态写入只能由 `/do` skill 完成。executor、verifier、debugger 和 execution helper 不直接调用 `scripts/do.mjs materialize` 或 `scripts/do.mjs update-task`，也不读写 `task.json`。
+`/do` 阶段的状态写入只能由 `/do` skill 完成。executor、verifier、debugger 和 execution helper 不直接调用 `scripts/run.mjs do materialize` 或 `scripts/run.mjs do update-task`，也不读写 `task.json`。
 
 ### executor
 
@@ -302,8 +302,8 @@ next suggestion:
 建议命令：
 
 ```text
-node scripts/do.mjs materialize
-node scripts/do.mjs update-task
+node scripts/run.mjs do materialize
+node scripts/run.mjs do update-task
 ```
 
 ### materialize

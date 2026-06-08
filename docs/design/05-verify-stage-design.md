@@ -98,7 +98,7 @@ blocked
 
 每次写入都必须刷新顶层 `updatedAt`，并写入 `verification.summary`。
 
-`/verify` 不写入验证过程中的持久中间态。模型侧读取文件、运行检查、委派 helper 和形成判断时不落盘；只有形成最终结论后，才通过 `scripts/verify.mjs complete` 一次性写入 `passed`、`needs_fix` 或 `blocked`。如果验证过程被中断，`task.json` 保持原状，下一次 `/verify` 重新执行本轮验证即可。
+`/verify` 不写入验证过程中的持久中间态。模型侧读取文件、运行检查、委派 helper 和形成判断时不落盘；只有形成最终结论后，才通过 `scripts/run.mjs verify complete` 一次性写入 `passed`、`needs_fix` 或 `blocked`。如果验证过程被中断，`task.json` 保持原状，下一次 `/verify` 重新执行本轮验证即可。
 
 `verification.summary` 只保存一句到几句短摘要，说明最终结论和下一步。它不保存完整 review 报告、命令输出、文件列表或 agent 响应。
 
@@ -187,7 +187,7 @@ R3
 7. 根据 `plan.md`、`task.json.tasks[]` 和 `checks[]` 形成本轮验证问题清单。
 8. 必要时委派 `verifier` 的 `final_verify` mode，或调用 `stageHelpers.review` 中合适的 review helper。
 9. 必要时读取相关项目文件或运行轻量检查命令。
-10. 根据验证判断调用 `scripts/verify.mjs complete` 写入 `passed`、`needs_fix` 或 `blocked`；写入 `needs_fix` 时必须同时提供 repair tasks。
+10. 根据验证判断调用 `scripts/run.mjs verify complete` 写入 `passed`、`needs_fix` 或 `blocked`；写入 `needs_fix` 时必须同时提供 repair tasks。
 11. 返回验证结论、简短原因和下一步建议。
 
 如果验证通过，下一步建议是 `/archive`。如果需要修复，下一步建议是回到 `/do`。如果阻塞来自计划口径不清或目标变化，下一步建议是回到 `/plan` 调整计划。
@@ -196,7 +196,7 @@ R3
 
 `verifier` 继续作为单个检查 agent，不拆成新的 reviewer agent。`/do` 阶段使用 `task_review` mode，`/verify` 阶段使用 `final_verify` mode。
 
-`final_verify` 只提供判断建议，不拥有状态写入权。即使它建议 `needs_fix`，真正 append repair tasks 的动作也必须由 `/verify` skill 调用 `scripts/verify.mjs complete` 完成。
+`final_verify` 只提供判断建议，不拥有状态写入权。即使它建议 `needs_fix`，真正 append repair tasks 的动作也必须由 `/verify` skill 调用 `scripts/run.mjs verify complete` 完成。
 
 ### 输入
 
@@ -262,7 +262,7 @@ next: <archive | do | plan | user_decision>
 `verify.mjs` 对应 `/verify` 的确定性状态入口。建议命令：
 
 ```text
-node scripts/verify.mjs complete
+node scripts/run.mjs verify complete
 ```
 
 `complete` 写入本轮验证结论。
@@ -431,7 +431,7 @@ type VerifyCompleteInput = {
 - 判断是否可以进入正式验证。
 - 根据 `plan.md`、`task.json` 和项目上下文形成本轮检查判断。
 - 必要时委派 `verifier final_verify` 或 review helper。
-- 调用 `scripts/verify.mjs complete` 写入结论。
+- 调用 `scripts/run.mjs verify complete` 写入结论。
 - 在对话中返回短结论和下一步建议。
 
 它不负责：

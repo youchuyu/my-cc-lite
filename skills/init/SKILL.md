@@ -19,11 +19,28 @@ description: 初始化或刷新 my-cc-lite 项目级状态
 4. 审查当前上下文可见的外部 companion helper。
 5. 排除 Claude Code 宿主基础能力、Claude Code 原生协作模式和 my-cc-lite 自身能力。
 6. 构造 `stageHelpers.planning`、`stageHelpers.execution` 和 `stageHelpers.review`。
-7. 调用 `node scripts/init.mjs init-project`，通过 stdin 传入 JSON。
+7. 调用 my-cc-lite runtime entry 的 `init init-project`，通过 stdin 传入 JSON。
 8. 汇总 `.my-cc-lite/project.json` 路径、项目摘要和各阶段 helper 数量。
 9. 提示下一步可以进入 `/plan`。
 
 ## 输入格式
+
+脚本调用统一使用 my-cc-lite runtime entry：
+
+- 如果当前工作目录存在 `scripts/run.mjs`，使用：
+
+```bash
+node scripts/run.mjs init init-project
+```
+
+- 否则先定位 my-cc-lite 插件根目录，使用：
+
+```bash
+node <pluginRoot>/scripts/run.mjs init init-project
+```
+
+- 调用命令时不得切换到插件根目录；当前工作目录必须保持为目标项目根目录。
+- 如果无法定位插件根目录，停止并提示用户提供插件根目录；不要尝试调用 `/scripts/run.mjs`。
 
 调用脚本时传入：
 
@@ -95,7 +112,7 @@ description: 初始化或刷新 my-cc-lite 项目级状态
 ## 调用示例
 
 ```bash
-node scripts/init.mjs init-project <<'JSON'
+node scripts/run.mjs init init-project <<'JSON'
 {
   "projectSummary": "A Claude Code plugin project for lightweight local task workflow state.",
   "stageHelpers": {

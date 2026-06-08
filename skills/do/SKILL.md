@@ -68,17 +68,24 @@ description: 执行当前 my-cc-lite plan.md 并推进 task.json 任务状态
 
 ## 脚本输入
 
-脚本路径解析：
+脚本调用统一使用 my-cc-lite runtime entry：
 
-- 如果当前工作目录存在 `scripts/do.mjs`，使用：
+- 如果当前工作目录存在 `scripts/run.mjs`，使用：
 
 ```bash
-node scripts/do.mjs materialize
-node scripts/do.mjs update-task
+node scripts/run.mjs do materialize
+node scripts/run.mjs do update-task
 ```
 
-- 如果当前工作目录不是 my-cc-lite 插件源码目录，先定位插件根目录，再使用绝对路径调用 `<pluginRoot>/scripts/do.mjs`。
-- 如果无法定位插件根目录，停止并提示用户提供插件根目录；不要尝试调用 `/scripts/do.mjs`。
+- 否则先定位 my-cc-lite 插件根目录，使用：
+
+```bash
+node <pluginRoot>/scripts/run.mjs do materialize
+node <pluginRoot>/scripts/run.mjs do update-task
+```
+
+- 调用命令时不得切换到插件根目录；当前工作目录必须保持为目标项目根目录。
+- 如果无法定位插件根目录，停止并提示用户提供插件根目录；不要尝试调用 `/scripts/run.mjs`。
 
 首次物化：
 
@@ -158,11 +165,11 @@ my-cc-lite `/do` 原生执行时，每个 task 默认按以下链路推进：
 7. debugger 修复后回到 executor / verifier 路径；如果无法给出清晰修复路径，`/do` 将当前 task 标记为 `blocked` 或 `failed` 并停止连续执行。
 8. 如果 `task_review` 返回 `blocked`，或当前 task 需要用户决策、权限、外部条件或计划调整，`/do` 将当前 task 标记为 `blocked` 并停止连续执行。
 
-`executor`、`verifier` 和 `debugger` 只返回判断和摘要，不调用 `scripts/do.mjs`，不读写 `task.json`，不自行标记状态。
+`executor`、`verifier` 和 `debugger` 只返回判断和摘要，不调用 `scripts/run.mjs do ...`，不读写 `task.json`，不自行标记状态。
 
 ## 状态边界
 
-`/do` skill 必须通过 `scripts/do.mjs` 写入状态，不直接手写 `task.json`。
+`/do` skill 必须通过 my-cc-lite runtime entry 写入状态，不直接手写 `task.json`。
 
 `/do` 只允许推进：
 
@@ -200,7 +207,7 @@ my-cc-lite `/do` 原生执行时，每个 task 默认按以下链路推进：
 - 不新增、删除、重排、合并或拆分已有 `tasks[]`。
 - 不保存 agent prompt、完整响应、命令日志、changed files 或 check 级结果。
 - 不调用 `/verify`、不标记最终通过、不自动归档。
-- 不让 executor、verifier、debugger 或外部 helper 直接调用 `scripts/do.mjs` 或读写 `task.json`。
+- 不让 executor、verifier、debugger 或外部 helper 直接调用 `scripts/run.mjs do ...` 或读写 `task.json`。
 
 ## 错误处理
 
