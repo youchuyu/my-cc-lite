@@ -11,7 +11,7 @@
 - 创建目录。
 - 读写 JSON。
 - 写入 `plan.md`。
-- 定位 current task。
+- 定位当前任务目录。
 - 校验最小状态结构。
 - 使用轻量锁保护写入。
 - 移动归档目录。
@@ -57,9 +57,9 @@ scripts/
 - 确保状态目录存在。
 - 读取和写入 JSON。
 - 读取和写入 `plan.md`。
-- 扫描 active task 目录。
-- 定位 current task。
-- 移动 active task 到 `archived_tasks/`。
+- 扫描 `.my-cc-lite/tasks/` 下的当前任务目录。
+- 定位当前任务目录。
+- 移动当前任务目录到 `archived_tasks/`。
 - 提供 `withStateLock()`。
 
 建议接口：
@@ -84,9 +84,9 @@ withStateLock(projectRoot, fn)
 
 `getCurrentTaskDir(projectRoot)` 的规则固定为：
 
-- 没有 active task：返回 `null`。
-- 只有一个 active task：返回该目录。
-- 多于一个 active task：报错，不做隐式选择。
+- `.my-cc-lite/tasks/` 下没有任务目录：返回 `null`。
+- `.my-cc-lite/tasks/` 下只有一个任务目录：返回该目录。
+- `.my-cc-lite/tasks/` 下多于一个任务目录：报错，不做隐式选择。
 
 ### schema.mjs
 
@@ -109,6 +109,8 @@ validateTaskPatch(patch)
 assertNoActiveTask(projectRoot)
 assertVerifiableTask(task)
 ```
+
+`assertVerifiableTask(task)` 用于校验 verify 前置任务终态：`tasks[]` 非空、所有 task 都是 `completed` 或 `skipped`、至少一个 task 是 `completed`、当前任务未归档。它不解析 `plan.md`，不支持全 `skipped` 通过。
 
 ### format.mjs
 
@@ -180,7 +182,7 @@ renderPlanMarkdown(input)
 
 行为：
 
-- 确认 `.my-cc-lite/tasks/` 下没有 active task。
+- 确认 `.my-cc-lite/tasks/` 下没有当前任务目录。
 - 生成 `taskId`。
 - 创建 `.my-cc-lite/tasks/<taskId>/`。
 - 写入 `.my-cc-lite/tasks/<taskId>/plan.md`。
@@ -225,7 +227,7 @@ node scripts/do.mjs update-task
 `materialize` 行为：
 
 - 读取并校验 `.my-cc-lite/project.json`。
-- 定位唯一 active task。
+- 确认 `.my-cc-lite/tasks/` 下刚好存在一个当前任务目录。
 - 读取当前 `plan.md`。
 - 校验 `objective` 非空、`tasks[]` 结构合法，以及 `steps[]` / `checks[]` 满足最小结构要求。
 - 如果 `task.json` 不存在，根据输入创建任务级机器状态。
@@ -246,11 +248,11 @@ node scripts/do.mjs update-task
 `update-task` 行为：
 
 - 读取并校验 `.my-cc-lite/project.json`。
-- 定位唯一 active task。
+- 确认 `.my-cc-lite/tasks/` 下刚好存在一个当前任务目录。
 - 读取并校验 `task.json`。
 - 更新指定 `tasks[].id` 对应 task 的 `status`。
 - 刷新顶层 `updatedAt`。
-- 如果所有 task 都是 `completed` 或 `skipped`，顶层仍保持 `stage: "executing"`，由 `/verify` 推进到验证阶段。
+- 如果所有 task 都是 `completed` 或 `skipped`，顶层仍保持 `stage: "executing"`，由 `/verify` 根据最终结论推进后续状态。
 
 禁止：
 
@@ -275,16 +277,19 @@ node scripts/do.mjs update-task
 
 行为：
 
-- 定位唯一 active task。
+- 确认 `.my-cc-lite/tasks/` 下刚好存在一个当前任务目录。
 - 读取 `plan.md` 和 `task.json`。
 - 更新 `verification.status` 和 `verification.summary`。
 - 刷新顶层 `updatedAt`。
-- 写入验证中间态时设置 `stage: "verifying"`。
 - 写入 `passed` 时设置 `stage: "verified"` 和 `status: "verified"`。
+- 写入 `needs_fix` 时设置 `stage: "executing"` 和 `status: "active"`，并 append 一个或少量 repair tasks。
+- 写入 `blocked` 时设置 `stage: "verifying"` 和 `status: "blocked"`。
 
 写入 `passed` 前必须确认：
 
+- `tasks[]` 非空。
 - 所有 `tasks[].status` 都是 `completed` 或 `skipped`。
+- 至少存在一个 `completed` task。
 - verifier 判断每个 task 的 `checks[]` 已通过。
 
 禁止：
@@ -308,7 +313,7 @@ node scripts/do.mjs update-task
 
 行为：
 
-- 定位唯一 active task。
+- 确认 `.my-cc-lite/tasks/` 下刚好存在一个当前任务目录。
 - 如果存在 `task.json`，更新顶层归档字段：
 
 ```json
@@ -343,9 +348,9 @@ node scripts/do.mjs update-task
 
 - 只读。
 - 输出项目是否初始化。
-- 输出 active task 数量。
-- 如果存在唯一 current task，输出 `plan.md` 路径、`task.json` 是否存在、当前 `stage`、`status`、`tasks[]` 摘要和 `verification` 摘要。
-- 如果存在多个 active task，输出异常。
+- 输出当前任务目录数量。
+- 如果存在唯一当前任务目录，输出 `plan.md` 路径、`task.json` 是否存在、当前 `stage`、`status`、`tasks[]` 摘要和 `verification` 摘要。
+- 如果存在多个任务目录，输出异常。
 
 禁止：
 
@@ -451,7 +456,7 @@ scripts 负责可复用的状态读写和校验逻辑。
 - 阶段 skill / orchestrator 可以调用对应阶段入口脚本。
 - agent 是否可以调用脚本由具体阶段设计决定；默认不直接写状态。
 - hook 可以调用只读或短写入脚本。
-- skill、agent 和 hook 不应复制 `.my-cc-lite/` 路径扫描、锁、JSON 写入或 current task 定位逻辑。
+- skill、agent 和 hook 不应复制 `.my-cc-lite/` 路径扫描、锁、JSON 写入或当前任务目录定位逻辑。
 
 ## 取舍
 

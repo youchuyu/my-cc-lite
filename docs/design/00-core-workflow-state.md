@@ -134,6 +134,7 @@ helper 通过扫描 `.my-cc-lite/tasks/` 下的任务目录定位当前任务：
 
 - 读取 `.my-cc-lite/tasks/<taskId>/plan.md`。
 - 读取并更新 `.my-cc-lite/tasks/<taskId>/task.json`。
+- 当本轮验证写入 `needs_fix`，且可以形成明确最小修复入口时，append 一个或少量 repair tasks 到 `tasks[]` 末尾。
 
 `/archive` 只移动当前任务目录：
 
@@ -191,7 +192,7 @@ helper 通过扫描 `.my-cc-lite/tasks/` 下的任务目录定位当前任务：
 }
 ```
 
-`/do` 首次执行时根据当前 `plan.md` 创建 `tasks[]`，并在每个 task 内写入对应的 `steps[]` 和 `checks[]`。`task.json` 创建后，`tasks[]` 作为执行阶段固化结构，不再由 `/do` 自动同步 `plan.md`。`steps[]` 可以用嵌套结构表达动作层级，但不记录 step 级状态。进入执行阶段后，`task.json` 记录执行状态；`/verify` 同时参考最新 `plan.md` 和 `task.json` 判断任务是否完成。
+`/do` 首次执行时根据当前 `plan.md` 创建 `tasks[]`，并在每个 task 内写入对应的 `steps[]` 和 `checks[]`。`task.json` 创建后，`tasks[]` 作为执行阶段固化结构，不再由 `/do` 自动同步 `plan.md`。唯一例外是 `/verify` 在本轮验证写入 `needs_fix` 时，可以 append 一个或少量 repair tasks 到 `tasks[]` 末尾，作为后续 `/do` 的最小修复入口。`steps[]` 可以用嵌套结构表达动作层级，但不记录 step 级状态。进入执行阶段后，`task.json` 记录执行状态；`/verify` 同时参考最新 `plan.md` 和 `task.json` 判断任务是否完成。
 
 `objective` 是 `/do` 首次物化时从当前 `plan.md` 的 `Objective` 部分提取或归纳得到的目标快照，用于状态摘要和快速查看。它不是独立输入源，也不覆盖 `plan.md`。
 
@@ -323,9 +324,11 @@ type Step =
 
 `task.json` 创建后，`tasks[]` 的结构不再由 `/do` 自动修改。`/do` 不新增、删除、重排、合并、拆分 task，也不修改 `tasks[].id`、`tasks[].title`、`tasks[].steps` 或 `tasks[].checks`。若需要改变执行拆解结构，应回到 `/plan` 重新规划当前任务。
 
+`/verify` 在写入 `needs_fix` 时可以 append 一个或少量 repair tasks，这是 `tasks[]` 结构固化规则的唯一例外。repair task 必须来自原 `plan.md` 的目标、范围、验收口径，或已有 `tasks[].checks[]` 暴露出的缺口；它不能引入新需求或扩大任务范围。`/verify` 只能 append，不能修改已有 task，不能删除、重排、合并或拆分已有 task。
+
 `tasks[].steps[]` 存储的是执行动作，不是状态机。`/do` 可以按自然顺序递归展开分组 step，但只回写 task 级状态，不回写每条 step 的完成状态。
 
-`tasks[].checks[]` 存储的是检查要求，不是 shell 命令记录，也不单独维护每条 check 的状态。`checks[]` MVP 保持字符串数组，不跟随 `steps[]` 树形化。具体检查可以由 review/verifier 子 agent 根据项目上下文决定，最终结论写入任务级 `verification`。
+`tasks[].checks[]` 存储的是检查要求，不是 shell 命令记录，也不单独维护每条 check 的状态。`checks[]` MVP 保持字符串数组，不跟随 `steps[]` 树形化。具体检查可以由 review/verifier 子 agent 根据项目上下文决定，任务级验证结论写入 `verification`。
 
 ## 任务状态
 
@@ -363,7 +366,7 @@ skipped
 
 ## verification
 
-`verification` 保存任务级最终验证结果，不记录完整检查日志。
+`verification` 保存任务级验证结果，不记录完整检查日志。
 
 ```json
 {
@@ -376,13 +379,15 @@ skipped
 
 `/verify` 只有在所有 tasks 完成或明确 skipped，且 review/verifier 根据每个 task 的 `checks[]` 判断通过后，才可以将 `verification.status` 设置为 `passed`。
 
+如果本轮验证未通过，但 `/verify` 已经 append 一个或少量后续 `/do` 可执行的 repair tasks，`verification.status` 设置为 `needs_fix`。如果验证未通过且无法形成明确 repair task，或缺少用户决策、权限、外部条件、计划调整，或当前上下文无法可靠判断，`verification.status` 设置为 `blocked`。
+
 验证状态：
 
 ```text
 not_started
-in_progress
 passed
-failed
+needs_fix
+blocked
 ```
 
 ## archived_tasks
