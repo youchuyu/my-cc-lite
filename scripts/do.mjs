@@ -13,13 +13,51 @@ import { getCurrentTaskDir, readPlan, readProject, readTask, withStateLock, writ
 
 async function main(argv) {
   const command = argv[2];
+  if (command === "inspect") {
+    return await inspect();
+  }
   if (command === "materialize") {
     return await materialize();
   }
   if (command === "update-task") {
     return await updateTask();
   }
-  throw new StateError("INVALID_INPUT", "Expected command: materialize or update-task.");
+  throw new StateError("INVALID_INPUT", "Expected command: inspect, materialize, or update-task.");
+}
+
+async function inspect() {
+  const projectRoot = process.cwd();
+  assertInitializedProject(await readProject(projectRoot));
+  const taskDir = await requireCurrentTaskDir(projectRoot);
+  const planPath = path.join(taskDir, "plan.md");
+  const planContent = await readPlan(taskDir);
+  const taskPath = path.join(taskDir, "task.json");
+  const task = await readTask(taskDir);
+  return {
+    taskId: path.basename(taskDir),
+    taskDir,
+    plan: {
+      exists: true,
+      path: planPath,
+      content: planContent
+    },
+    task: task
+      ? {
+          exists: true,
+          path: taskPath,
+          status: task.status,
+          stage: task.stage,
+          objective: task.objective,
+          updatedAt: task.updatedAt,
+          verification: task.verification,
+          archive: task.archive,
+          tasks: task.tasks.map(summarizeTaskForInspect)
+        }
+      : {
+          exists: false,
+          path: taskPath
+        }
+  };
 }
 
 async function materialize() {
@@ -122,6 +160,14 @@ function summarizeTopLevelStatus(tasks) {
   return "blocked";
 }
 
+function summarizeTaskForInspect(task) {
+  return {
+    ...summarizeTask(task),
+    steps: task.steps,
+    checks: task.checks
+  };
+}
+
 async function readStdinJson(command) {
   const content = readFileSync(0, "utf8");
   if (!content.trim()) {
@@ -136,10 +182,12 @@ async function readStdinJson(command) {
 
 function doHelpText() {
   return `Usage:
+  node scripts/do.mjs inspect
   node scripts/do.mjs materialize < input.json
   node scripts/do.mjs update-task < input.json
 
 Commands:
+  inspect        Read current do-stage state without writing files
   materialize    Create task.json for the unique active task
   update-task    Update one task entry status in task.json
 `;

@@ -19,6 +19,7 @@ function usageText() {
   return `Usage:
   node scripts/run.mjs init init-project < input.json
   node scripts/run.mjs plan create-task < input.json
+  node scripts/run.mjs do inspect
   node scripts/run.mjs do materialize < input.json
   node scripts/run.mjs do update-task < input.json
   node scripts/run.mjs verify complete < input.json

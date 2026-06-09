@@ -17,30 +17,36 @@ description: 执行当前 my-cc-lite plan.md 并推进 task.json 任务状态
 
 ## 执行步骤
 
-1. 读取 `.my-cc-lite/project.json`，确认项目已初始化。
-2. 定位唯一 active task，读取 `plan.md`。
-3. 如果缺少 `task.json`，根据最新 `plan.md` 生成 `objective` 和 `tasks[]`。
-4. 调用 do 阶段脚本执行 `materialize`，通过 stdin 传入 JSON。
-5. 如果已有 `task.json`，直接读取它恢复执行状态。
-6. 选择下一个可执行 task：优先 `in_progress`，否则第一个 `pending`。
-7. 如果只剩 `blocked` 或 `failed`，说明原因并请求用户处理阻塞、确认重试或回到 `/plan`。
-8. 如果所有 task 都是 `completed` 或 `skipped`，提示进入 `/verify`。
-9. 基于当前 `plan.md` 和完整 `task.json.tasks[]` 分析本任务整体执行结构，列出可编排或委派 agent 的高阶执行方式候选。
-10. 判断本次 `/do` 的执行方式：
-    - 用户已明确指定执行方式时，直接使用该方式。
-    - 用户明确要求连续执行但未指定方式时，默认使用 my-cc-lite 内置 agent 调度链。
-    - 存在明显匹配的外部高阶执行能力时，说明候选项的适用性、风险和推荐项，并让用户选择。
-    - 没有外部高阶能力时，默认使用 my-cc-lite 内置 agent 调度链。
-11. 本次 `/do` 后续 task 沿用选定执行方式；只有后续 task 性质明显变化或触发停止条件，才重新判断。
-12. 对当前 task 调用 do 阶段脚本执行 `update-task`，标记为 `in_progress`。
-13. 按选定执行方式推进当前 task。
-14. 使用 `verifier` 的 `task_review` mode 或必要检查判断当前 task 是否满足自己的 `checks[]`。
-15. 根据结果调用 `update-task` 写入 `completed`、`blocked` 或 `failed`。
-16. 当前 task 完成后重新读取或使用最新 `task.json.tasks[]` 摘要，继续选择下一个 `pending` task。
-17. 循环直到所有 task 完成或跳过，或遇到停止条件。
-18. 向用户汇总本次连续执行完成内容、局部检查结果、剩余 task 和下一步。
+1. 调用 `scripts/run.mjs do inspect`，读取当前 `/do` 状态快照。
+2. 如果 `inspect` 返回 `PROJECT_NOT_INITIALIZED`、`NO_ACTIVE_TASK`、`MULTIPLE_ACTIVE_TASKS` 或 `PLAN_NOT_FOUND`，按错误码提示用户处理，不自行绕过脚本扫描状态。
+3. 如果 `inspect.result.task.exists === false`，将 `inspect.result.plan.content`、`inspect.result.taskDir` 和首次物化约束交给 `task-materializer`，获取 `materialize` 输入草案。
+4. 检查 `task-materializer.result`：`ready` 时调用 do 阶段脚本执行 `materialize`；`coarse_ready` 时先让用户确认；`needs_plan_update` 或 `blocked` 时停止并说明原因。
+5. 如果 `ready` 分支刚刚物化成功且本轮需要继续执行，再次调用 `scripts/run.mjs do inspect` 获取最新状态快照。
+6. 根据最新 `inspect.result.task.tasks[]` 判断当前执行状态：
+   - 如果所有 task 都是 `completed` 或 `skipped`，提示进入 `/verify`。
+   - 如果只剩 `blocked` 或 `failed`，说明原因并请求用户处理阻塞、确认重试、跳过或回到 `/plan`。
+   - 如果存在 `in_progress` 或 `pending`，继续执行方式判断。
+7. 基于当前 `plan.md` 和完整 `task.json.tasks[]` 分析本任务整体执行结构，列出可编排或委派 agent 的高阶执行方式候选。
+8. 判断本次 `/do` 的执行方式：
+   - 用户已明确指定执行方式时，直接使用该方式。
+   - 用户明确要求连续执行但未指定方式时，默认使用 my-cc-lite 内置 agent 调度链。
+   - 存在明显匹配的外部高阶执行能力时，说明候选项的适用性、风险和推荐项，并让用户选择。
+   - 没有外部高阶能力时，默认使用 my-cc-lite 内置 agent 调度链。
+9. 本次 `/do` 后续 task 沿用选定执行方式；只有后续 task 性质明显变化或触发停止条件，才重新判断。
+10. 根据最新 `inspect.result.task.tasks[]` 选择可执行 task：优先 `in_progress`，否则第一个 `pending`。
+11. 对当前 task 调用 do 阶段脚本执行 `update-task`，标记为 `in_progress`。
+12. 按选定执行方式推进当前 task：使用 my-cc-lite 原生执行时，调度 `executor` agent 执行当前 task；使用外部高阶执行方式时，将当前 task、必要 plan 摘要、完整 `tasks[]` 摘要、执行边界和状态更新规则提供给调度方，由其完成 agent 编排并返回执行结果和状态建议。
+13. 使用 `verifier` 的 `task_review` mode 或必要检查判断当前 task 是否满足自己的 `checks[]`。
+14. 根据结果调用 `update-task` 写入 `completed`、`blocked` 或 `failed`。
+15. 当前 task 完成后重新读取或使用最新 `task.json.tasks[]` 摘要，继续选择下一个 `pending` task。
+16. 循环直到所有 task 完成或跳过，或遇到停止条件。
+17. 向用户汇总本次连续执行完成内容、局部检查结果、剩余 task 和下一步。
 
 首次 materialize 成功后，默认继续执行第一个 `pending` task，并在每个 task 通过局部检查后继续推进下一个 `pending` task。只有任务拆解会改变计划目标、范围或验收口径，才在创建 `task.json` 后停止并提示回到 `/plan`。
+
+恢复阶段只读取 `inspect` 返回的状态摘要，不读取业务代码、不搜索仓库、不补全文件清单。业务代码阅读由 executor 在当前 task 范围内渐进完成。
+
+恢复到 `in_progress` task 后，`/do` 仍只负责选择 task 和调度 executor，不在主流程中补读业务上下文。
 
 ## 从 plan.md 生成 tasks[]
 
@@ -68,13 +74,14 @@ description: 执行当前 my-cc-lite plan.md 并推进 task.json 任务状态
 
 ## 脚本输入
 
-脚本调用统一使用 my-cc-lite runtime entry：
+脚本调用统一使用 my-cc-lite runtime entry。`scripts/run.mjs` 必须来自 my-cc-lite 插件根目录，不能因为目标项目根目录下存在同名 `scripts/run.mjs` 就直接调用。
 
-- 如果当前工作目录存在 `scripts/run.mjs`，使用：
+- 如果当前工作目录就是 my-cc-lite 插件源码根目录，且确认该 `scripts/run.mjs` 属于 my-cc-lite，可以使用：
 
 ```bash
 node scripts/run.mjs do materialize
 node scripts/run.mjs do update-task
+node scripts/run.mjs do inspect
 ```
 
 - 否则先定位 my-cc-lite 插件根目录，使用：
@@ -82,6 +89,7 @@ node scripts/run.mjs do update-task
 ```bash
 node <pluginRoot>/scripts/run.mjs do materialize
 node <pluginRoot>/scripts/run.mjs do update-task
+node <pluginRoot>/scripts/run.mjs do inspect
 ```
 
 - 调用命令时不得切换到插件根目录；当前工作目录必须保持为目标项目根目录。
@@ -102,6 +110,8 @@ node <pluginRoot>/scripts/run.mjs do update-task
   ]
 }
 ```
+
+如果 `task-materializer` 返回的是带流程控制字段的完整结果，调用 `materialize` 前只传入 `objective` 和 `tasks`。`result`、`shouldStopAfterMaterialize` 和 `reason` 只由 `/do` skill 用于流程判断，不传给脚本。
 
 状态更新：
 
@@ -128,6 +138,8 @@ node <pluginRoot>/scripts/run.mjs do update-task
 
 执行方式只影响本次 `/do` 调用中的协作，不写入任何状态文件。
 
+外部高阶执行方式可以编排自己的 agent/helper 完成当前 task，但不得直接读写 `task.json` 或调用 do 阶段脚本；它只能返回执行摘要、检查结论、建议状态和必要 `statusReason`，由 `/do` 统一调用 `update-task` 写入状态。
+
 执行方式的主要分析依据是当前 `plan.md` 和完整 `task.json.tasks[]`，而不是某个 task 的局部实现细节。当前 task 只用于确定正在推进的执行单元，以及它在整体任务中的位置。
 
 列出候选执行方式时考虑：
@@ -143,8 +155,7 @@ node <pluginRoot>/scripts/run.mjs do update-task
 候选项只包括能编排或委派执行的能力：
 
 - my-cc-lite `/do` 原生执行。
-- 当前上下文可见的外部高阶执行能力，如：Workflow
-、TeamCreate等。
+- 当前上下文可见的外部高阶执行能力，如：Workflow、TeamCreate 等。
 - `project.json.stageHelpers.execution` 中的外部 execution helper。
 - 用户明确指定的外部 workflow/helper。
 
@@ -207,7 +218,7 @@ my-cc-lite `/do` 原生执行时，每个 task 默认按以下链路推进：
 - 不新增、删除、重排、合并或拆分已有 `tasks[]`。
 - 不保存 agent prompt、完整响应、命令日志、changed files 或 check 级结果。
 - 不调用 `/verify`、不标记最终通过、不自动归档。
-- 不让 executor、verifier、debugger 或外部 helper 直接调用 `scripts/run.mjs do ...` 或读写 `task.json`。
+- 不让 executor、verifier、debugger 或外部 helper 直接调用 `scripts/run.mjs do ...`、直接调用 `scripts/do.mjs` 或读写 `task.json`。
 
 ## 错误处理
 
@@ -227,4 +238,4 @@ my-cc-lite `/do` 原生执行时，每个 task 默认按以下链路推进：
 - 本次连续执行结果。
 - 局部检查结论。
 - 剩余 `pending` / `blocked` / `failed` task。
-- 如果全部完成，下一步进入 `/verify`；如果中途停止，说明停止原因和下一步处理方式。
+- 如果所有 task 都已完成或跳过，说明执行阶段 task 已完成，下一步进入 `/verify`；如果中途停止，说明停止原因和下一步处理方式。

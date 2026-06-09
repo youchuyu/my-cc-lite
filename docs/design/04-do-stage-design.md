@@ -14,7 +14,7 @@
 - `tasks[]` 面向 executor 子 agent。
 - `steps[]` 可以嵌套表达动作拆解，但不维护 step 级状态。
 - `checks[]` 保持扁平字符串数组，供后续 `/verify` 使用。
-- `/do` skill 是轻量 orchestrator，负责状态读写调用、task 选择和 agent 协作。
+- `/do` skill 是轻量 orchestrator，负责用户交互、确定性恢复选择、执行方式选择和 agent 调度。
 - `/do` 不更新 `project.json`，不记录 changed files，不保存执行日志。
 
 `/do` 可以补充局部实现细节，例如任务顺序、文件落点、局部技术判断和执行检查口径；但不应重新定义 `/plan` 已确认的目标、范围、核心方案或完成标准。
@@ -50,7 +50,7 @@
 
 ## 执行模型
 
-`/do` skill 负责模型侧协作，`scripts/do.mjs` 只负责确定性状态读写。
+`/do` skill 负责模型侧协作、确定性 task 选择和脚本调用，`scripts/do.mjs` 只负责确定性状态读写。
 
 默认一次 `/do` 连续推进当前 active task 中所有可执行的 task。每次状态写入仍只更新一个 task；用户再次调用 `/do` 时，从已有 `task.json` 恢复进度并继续处理剩余可执行 task。
 
@@ -71,19 +71,28 @@
 2. 定位唯一 active task。
 3. 读取当前 `plan.md`。
 4. 读取 `task.json`。
-5. 如果 `task.json` 不存在，执行首次物化。
-6. 选择下一个可执行 task。
-7. 确定本次执行方式。
-8. 调用 `scripts/run.mjs do update-task` 将该 task 标记为 `in_progress`。
-9. 按已选执行方式执行当前 task。
-10. 执行完成后，委派 `verifier` 的 `task_review` mode，或由 `/do` skill 自行做局部检查。
-11. 根据执行和局部检查结果，将该 task 标记为 `completed`、`blocked` 或 `failed`。
-12. 重新读取或使用最新 `task.json.tasks[]` 摘要。
-13. 如果仍有可执行 `pending` task，继续执行步骤 6。
-14. 如果所有 task 都是 `completed` 或 `skipped`，提示进入 `/verify`。
-15. 如果出现停止条件，返回本次完成内容、局部检查结果、当前剩余 task 和下一步建议。
+5. 如果 `task.json` 不存在，`/do` skill 调用内置 `task-materializer` 根据最新 `plan.md` 生成 `objective` 和初始 `tasks[]` 草案，并决定首次物化后的流程建议。
+6. 读取最新 `task.json` 后，先判断当前执行状态：所有 task 都是 `completed` 或 `skipped` 时提示进入 `/verify`；只剩 `blocked` 或 `failed` task 时，停止并要求用户明确恢复、重试、跳过或回到 `/plan`。
+7. 如果存在 `in_progress` 或 `pending` task，基于当前 `plan.md` 和完整 `task.json.tasks[]` 分析本任务整体执行结构，确定本次执行方式。
+8. 按确定性规则选择当前 task：优先恢复 `in_progress`，否则选择第一个 `pending`。
+9. `/do` skill 调用 `scripts/run.mjs do update-task` 将当前 task 标记为 `in_progress`。
+10. 按已选执行方式执行当前 task；原生执行时把当前 task、必要 plan 摘要和执行边界交给 executor。
+11. 执行完成后，委派 `verifier` 的 `task_review` mode，或由 `/do` skill 自行做局部检查。
+12. 必要时委派 `debugger` 做明确失败的最小修复。
+13. `/do` 根据 executor、verifier 和 debugger 的短摘要按固定规则决定当前 task 状态，并调用 `scripts/run.mjs do update-task` 写入。
+14. 重新读取或使用最新 `task.json.tasks[]` 摘要。
+15. 如果仍有可执行 `pending` task，继续执行步骤 6。
+16. 如果所有 task 都是 `completed` 或 `skipped`，提示进入 `/verify`。
+17. 如果出现停止条件，返回本次完成内容、局部检查结果、当前剩余 task 和下一步建议。
 
-首次 `/do` 在 `materialize` 成功后，默认继续选择第一个 `pending` task，并在该 task 通过局部检查后继续推进下一个 `pending` task。只有当首次拆解结果还需要用户确认，或拆解本身暴露了会影响计划方向、范围边界或验收口径的缺口时，才在创建 `task.json` 后停止。
+`/do` skill 检查 `task-materializer` 输出后再决定是否调用 `scripts/run.mjs do materialize`：
+
+- `ready`：调用 `materialize`，成功后默认继续选择第一个 `pending` task，并在该 task 通过局部检查后继续推进下一个 `pending` task。
+- `coarse_ready`：可以调用 `materialize`，但成功后应停止，让用户确认粗粒度拆解是否可继续执行。
+- `needs_plan_update`：不创建 `task.json`，提示用户回到 `/plan` 补清目标、范围、执行边界或验收口径。
+- `blocked`：不创建 `task.json`，说明缺少的文件、权限、外部条件或用户决策。
+
+只有当首次拆解结果还需要用户确认，或拆解本身暴露了会影响计划方向、范围边界或验收口径的缺口时，才在创建 `task.json` 后停止。
 
 ### 停止条件
 
@@ -113,7 +122,9 @@
 
 若 `plan.md` 中缺少明确 `Objective`，`/do` 应暂停并提示回到 `/plan` 补清目标。
 
-任务拆解属于 `/do` skill 的 orchestration 职责，不单独定义 task materializer agent。原因是拆解结果和 `task.json` 写入边界强相关，且当前目标是保持单一路径。
+任务拆解属于 `/do` skill 的 orchestration 职责，但首次物化的模型拆解可以委派给 `/do` 内置的 `task-materializer`。`task-materializer` 只生成 `scripts/run.mjs do materialize` 所需的输入草案和流程建议，不读写 `task.json`，不调用阶段脚本，也不参与后续执行。
+
+真正写入 `task.json` 的边界仍是 `/do` skill 调用 `scripts/run.mjs do materialize`。这样可以隔离首次拆解上下文，同时保持状态写入单一路径。
 
 首次物化默认只依赖 `plan.md` 的目标、计划项和验收口径。`/do` 不为了拆解任务而大范围读取业务代码。
 
@@ -196,6 +207,16 @@ skipped
 - `failed -> in_progress` 需要明确重试意图，或 debugger 已给出可继续执行的最小修复路径。
 - `completed` 和 `skipped` 默认不回退；只有用户明确要求重新执行、或回到 `/plan` 调整计划后，才允许重新进入执行路径。
 
+`/do` 根据 executor、verifier 和 debugger 的短摘要写入当前 task 的最小状态：
+
+- verifier 返回 `passed`：写入 `completed`。
+- verifier 返回 `needs_fix` 且 debugger 已完成明确最小修复：重新进入局部检查或重试当前 task。
+- verifier 返回 `needs_fix` 且修复路径不清晰：写入 `failed` 或 `blocked`，并保存简短 `statusReason`。
+- verifier 返回 `blocked`：写入 `blocked`，并保存简短 `statusReason`。
+- executor 失败且错误明确：可先调用 debugger；无法最小修复时写入 `failed`。
+- executor 失败且缺少证据、权限、外部条件或用户决策：写入 `blocked`。
+- 计划目标、范围或验收口径不足以继续判断：停止并提示回到 `/plan`。
+
 顶层 `status` 汇总规则：
 
 - 如果存在 `pending` 或 `in_progress` task，顶层 `status` 保持 `active`。
@@ -218,9 +239,19 @@ skipped
 
 ### do skill
 
-`/do` skill 统一负责判断本次调用是首次物化还是后续执行、从 `plan.md` 生成首次 `tasks[]`、循环选择可执行 task、调用阶段脚本写入状态，并根据 executor、verifier 或 debugger 返回结果决定 task 状态。
+`/do` skill 统一负责用户交互、确定性恢复选择、执行方式选择、连续执行循环、agent 调度和脚本调用。
 
-`/do` 阶段的状态写入只能由 `/do` skill 完成。executor、verifier、debugger 和 execution helper 不直接调用 `scripts/run.mjs do materialize` 或 `scripts/run.mjs do update-task`，也不读写 `task.json`。
+`/do` 阶段的状态写入只能由 `/do` skill 调用 `scripts/run.mjs do materialize` 或 `scripts/run.mjs do update-task` 完成。executor、verifier、debugger 和 execution helper 不直接调用阶段脚本，也不读写 `task.json`。
+
+恢复选择保持确定性：
+
+- 优先恢复 `in_progress` task。
+- 没有 `in_progress` 时选择第一个 `pending` task。
+- 所有 task 都是 `completed` 或 `skipped` 时，提示进入 `/verify`。
+- `blocked` task 只有在用户明确要求恢复，或阻塞条件已明确解除时才重新进入执行。
+- `failed` task 只有在用户明确要求重试，或 debugger 已给出可继续路径后才重新进入执行。
+
+恢复阶段只读取状态摘要，不读取业务代码、不搜索仓库、不补全文件清单。业务代码阅读由 executor 在当前 task 范围内渐进完成。
 
 ### executor
 
@@ -435,7 +466,8 @@ LOCK_TIMEOUT
 - step/check 级状态。
 - current execution task 指针。
 - 自动 plan-to-task 差异同步。
-- 独立 task materializer 或 task-reviewer agent。
+- 独立 task-reviewer agent。
+- 拥有状态写入权或参与后续执行的 task materializer agent。
 - 执行日志、事件日志或 changed files 记录。
 - 多 active task 并行执行、隐式计划审批或自动 verify/archive。
 
