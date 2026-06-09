@@ -2,28 +2,18 @@
 
 my-cc-lite 原生接管和外部高阶接管共享同一套状态边界。
 
-## 允许推进的执行状态
+## /do 可维护的状态
+
+`/do` 阶段只负责推进当前任务的执行状态：
 
 - `tasks[].status`
 - `tasks[].statusReason`
 - 由脚本维护的顶层 `status`
 - 由脚本维护的顶层 `updatedAt`
 
-## 禁止修改的任务结构和阶段状态
+`/do` 不调整任务结构、计划内容或阶段状态；例如不新增、删除、重排、合并、拆分任务，不修改 `plan.md`、`verification`、`archive`，也不把顶层 `stage` 推进到后续阶段。
 
-- `tasks[].id`
-- `tasks[].title`
-- `tasks[].steps`
-- `tasks[].checks`
-- `tasks[]` 的新增、删除、重排、合并、拆分
-- `project.json`
-- `plan.md`
-- `verification`
-- `archive`
-
-两种接管方式都只能推进执行状态，不能修改任务结构。执行状态必须通过 my-cc-lite 的受限脚本接口写入，不能手写 `task.json`。
-
-顶层 `stage` 在 `/do` 阶段只保持为 `executing`，不由 `/do` 推进到后续阶段。
+两种接管方式都只能推进执行状态。执行状态必须通过 my-cc-lite 的受限脚本接口写入，不能手写 `task.json`。
 
 ## 状态迁移
 
