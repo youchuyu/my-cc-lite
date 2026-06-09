@@ -1,6 +1,7 @@
 ---
 name: do
 description: 执行当前 my-cc-lite plan.md 并推进 task.json 任务状态
+disable-model-invocation: true
 ---
 
 # Do

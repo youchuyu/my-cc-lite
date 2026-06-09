@@ -1,6 +1,7 @@
 ---
 name: init
 description: 初始化或刷新 my-cc-lite 项目级状态
+disable-model-invocation: true
 ---
 
 # Init

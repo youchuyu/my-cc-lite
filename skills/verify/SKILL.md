@@ -1,6 +1,7 @@
 ---
 name: verify
 description: 验收当前 my-cc-lite 任务并写入 task.json 最终验证结论
+disable-model-invocation: true
 ---
 
 # Verify

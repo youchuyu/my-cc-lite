@@ -1,6 +1,7 @@
 ---
 name: archive
 description: 关闭当前 my-cc-lite 任务并移动到 archived_tasks
+disable-model-invocation: true
 ---
 
 # Archive

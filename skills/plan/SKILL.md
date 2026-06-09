@@ -1,6 +1,7 @@
 ---
 name: plan
 description: 收敛任务方案并创建 my-cc-lite plan.md
+disable-model-invocation: true
 ---
 
 # Plan
