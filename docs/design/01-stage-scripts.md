@@ -270,6 +270,8 @@ node scripts/run.mjs do update-task
 - 刷新顶层 `updatedAt`。
 - 如果所有 task 都是 `completed` 或 `skipped`，顶层仍保持 `stage: "executing"`，由 `/verify` 根据最终结论推进后续状态。
 
+`update-task` 是 do 阶段唯一允许推进 task 执行状态的受限接口。my-cc-lite 原生接管由 `/do` skill 调用该接口；外部高阶接管时，外部流程也只能通过该接口推进执行状态，不能直接手写 `task.json` 或修改任务结构。
+
 禁止：
 
 - 不更新 `project.json`。
