@@ -6,6 +6,12 @@
 
 本流程只负责状态读取、当前 task 选择、执行交接、结果接收和状态写入；不读取业务代码、不搜索仓库、不修改业务文件、不运行项目检查命令。
 
+## Hook-assisted chaining experiment
+
+`SubagentStop` hook 可以在 executor、verifier 或 debugger 返回后提供下一步提示，用来提醒 `/do` 继续进入 verifier、debugger、executor 或状态写入步骤。
+
+hook 输出只作为流程提示；`/do` 仍负责 agent 调度判断和所有状态写入。如果 hook 提示与本文件规则冲突，以本文件规则为准。
+
 ## 阶段总览
 
 流程阶段如下：

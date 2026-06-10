@@ -10,8 +10,11 @@ import { fileURLToPath } from "node:url";
 const pluginRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const runScript = path.join(pluginRoot, "scripts", "run.mjs");
 const planScript = path.join(pluginRoot, "scripts", "plan.mjs");
+const doAgentChainHook = path.join(pluginRoot, "scripts", "hooks", "do-agent-chain.mjs");
+const stagePreflightHook = path.join(pluginRoot, "scripts", "hooks", "stage-preflight.mjs");
 const targetDir = await mkdtemp(path.join(os.tmpdir(), "my-cc-lite-init-smoke-"));
 const targetRoot = await realpath(targetDir);
+const hookLogPath = path.join(targetDir, "my-cc-lite-hook.log");
 
 function runStage(stage, command, input) {
   return spawnSync(process.execPath, [runScript, stage, command], {
@@ -111,6 +114,61 @@ function runArchiveFail(input) {
   return payload.error;
 }
 
+function runDoAgentChainHook(input) {
+  const result = spawnSync(process.execPath, [doAgentChainHook], {
+    cwd: targetDir,
+    input: JSON.stringify(input),
+    env: {
+      ...process.env,
+      MY_CC_LITE_HOOK_LOG: hookLogPath
+    },
+    encoding: "utf8"
+  });
+  if (result.status !== 0) {
+    throw new Error(`do-agent-chain hook failed:\n${result.stdout || result.stderr}`);
+  }
+  return parseOutput(result.stdout);
+}
+
+function runStagePreflightHook(input, cwd = targetDir) {
+  const result = spawnSync(process.execPath, [stagePreflightHook], {
+    cwd,
+    input: JSON.stringify(input),
+    encoding: "utf8"
+  });
+  if (result.status !== 0) {
+    throw new Error(`stage-preflight hook failed:\n${result.stdout || result.stderr}`);
+  }
+  return parseOutput(result.stdout);
+}
+
+function userPromptExpansion(commandName, cwd = targetDir) {
+  return {
+    session_id: "smoke-session",
+    transcript_path: path.join(cwd, "transcript.jsonl"),
+    cwd,
+    permission_mode: "acceptEdits",
+    hook_event_name: "UserPromptExpansion",
+    expansion_type: "slash_command",
+    command_name: commandName,
+    command_args: "",
+    command_source: "plugin",
+    prompt: `/${commandName}`
+  };
+}
+
+function assertBlockedPreflight(payload, pattern) {
+  assert.equal(payload.continue, true);
+  assert.equal(payload.decision, "block");
+  assert.match(payload.reason, pattern);
+}
+
+function assertContextPreflight(payload, pattern) {
+  assert.equal(payload.continue, true);
+  assert.equal(payload.hookSpecificOutput.hookEventName, "UserPromptExpansion");
+  assert.match(payload.hookSpecificOutput.additionalContext, pattern);
+}
+
 function parseOutput(output) {
   try {
     return JSON.parse(output);
@@ -150,6 +208,59 @@ try {
   });
   assert.equal(directPlanHelp.status, 0);
   assert.match(directPlanHelp.stdout, /node scripts\/plan\.mjs create-task/);
+
+  const ignoredHook = runDoAgentChainHook({
+    hook_event_name: "PostToolUse",
+    agent_type: "executor",
+    last_assistant_message: "result: completed"
+  });
+  assert.equal(ignoredHook.continue, true);
+  assert.equal(ignoredHook.suppressOutput, true);
+
+  const ignoredPreflightHook = runStagePreflightHook(userPromptExpansion("other-plugin:do"));
+  assert.equal(ignoredPreflightHook.continue, true);
+  assert.equal(ignoredPreflightHook.suppressOutput, true);
+
+  const uninitializedPreflightHook = runStagePreflightHook(userPromptExpansion("my-cc-lite:do"));
+  assertBlockedPreflight(uninitializedPreflightHook, /run \/init before \/do/);
+
+  const executorCompletedHook = runDoAgentChainHook({
+    hook_event_name: "SubagentStop",
+    agent_type: "my-cc-lite:executor",
+    last_assistant_message: "result: completed\nsummary: changed files\nfiles: src/a.js\nchecks: manual"
+  });
+  assert.equal(executorCompletedHook.continue, true);
+  assert.equal(executorCompletedHook.hookSpecificOutput.hookEventName, "SubagentStop");
+  assert.match(executorCompletedHook.hookSpecificOutput.additionalContext, /invoke verifier with mode: task_review/);
+
+  const verifierPassedHook = runDoAgentChainHook({
+    hook_event_name: "SubagentStop",
+    agent_type: "verifier",
+    last_assistant_message: "mode: task_review\nresult: passed\nreason: checks passed\nnext: do"
+  });
+  assert.match(verifierPassedHook.hookSpecificOutput.additionalContext, /may write completed/);
+
+  const verifierNeedsFixHook = runDoAgentChainHook({
+    hook_event_name: "SubagentStop",
+    agent_type: "verifier",
+    last_assistant_message: "mode: task_review\nresult: needs_fix\nreason: test failed\nnext: debugger"
+  });
+  assert.match(verifierNeedsFixHook.hookSpecificOutput.additionalContext, /keep the task in progress and continue with debugger/);
+
+  const finalVerifyHook = runDoAgentChainHook({
+    hook_event_name: "SubagentStop",
+    agent_type: "verifier",
+    last_assistant_message: "mode: final_verify\nresult: passed\nreason: final pass\nnext: archive"
+  });
+  assert.equal(finalVerifyHook.continue, true);
+  assert.equal(finalVerifyHook.suppressOutput, true);
+
+  const debuggerFixedHook = runDoAgentChainHook({
+    hook_event_name: "SubagentStop",
+    agent_type: "debugger",
+    last_assistant_message: "result: fixed\nrootCause: missing import\nfix: added import\nchecks: node --check\nnext: verifier"
+  });
+  assert.match(debuggerFixedHook.hookSpecificOutput.additionalContext, /continue with verifier task_review/);
 
   const uninitializedArchiveError = runArchiveFail(
     JSON.stringify({
@@ -335,6 +446,9 @@ try {
   }
   assert.equal(existsSync(path.join(targetDir, ".my-cc-lite", "tasks")), false);
 
+  const noActiveDoPreflightHook = runStagePreflightHook(userPromptExpansion("my-cc-lite:do"));
+  assertBlockedPreflight(noActiveDoPreflightHook, /run \/plan before \/do/);
+
   const noActiveTaskError = runDoFail(
     "materialize",
     JSON.stringify({
@@ -401,6 +515,9 @@ try {
   assert.equal(await readFile(plan.planPath, "utf8"), `${planMarkdown}\n`);
   assert.equal(existsSync(path.join(plan.taskDir, "task.json")), false);
   assert.equal(await readFile(path.join(targetDir, ".my-cc-lite", "project.json"), "utf8"), beforePlanProject);
+
+  const firstMaterializationPreflightHook = runStagePreflightHook(userPromptExpansion("my-cc-lite:do"));
+  assertContextPreflight(firstMaterializationPreflightHook, /first materialization/);
 
   const missingTaskStateError = runVerifyFail(
     JSON.stringify({
@@ -506,6 +623,9 @@ try {
   assert.equal(await readFile(path.join(archiveTargetDir, "sentinel.txt"), "utf8"), "keep me");
   assert.equal(JSON.parse(await readFile(materialized.taskPath, "utf8")).archive.archivedAt, null);
   await rm(archiveTargetDir, { recursive: true, force: true });
+
+  const pendingVerifyPreflightHook = runStagePreflightHook(userPromptExpansion("my-cc-lite:verify"));
+  assertBlockedPreflight(pendingVerifyPreflightHook, /return to \/do/);
 
   const pendingVerifyError = runVerifyFail(
     JSON.stringify({
@@ -785,6 +905,9 @@ try {
     afterBlockedTaskJson.tasks.map((task) => task.id),
     ["T1", "T2", "T3", "R1", "R2"]
   );
+
+  const blockedArchivePreflightHook = runStagePreflightHook(userPromptExpansion("my-cc-lite:archive"));
+  assertContextPreflight(blockedArchivePreflightHook, /confirm that the user intends to close/);
 
   const invalidVerificationTaskJson = structuredClone(afterBlockedTaskJson);
   invalidVerificationTaskJson.verification.status = "legacy";

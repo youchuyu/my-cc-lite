@@ -1,28 +1,48 @@
 {
   "description": "my-cc-lite state-backed orchestration hooks",
   "hooks": {
-    "UserPromptSubmit": [
+    "UserPromptExpansion": [
       {
-        "matcher": "*",
-        "hooks": []
+        "matcher": "^my-cc-lite:(init|plan|do|verify|archive)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks/stage-preflight.mjs\"",
+            "timeout": 5
+          }
+        ]
       }
     ],
-    "PostToolUse": [
+    "SubagentStop": [
       {
-        "matcher": "*",
-        "hooks": []
-      }
-    ],
-    "PreCompact": [
+        "matcher": "^my-cc-lite:executor$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks/do-agent-chain.mjs\"",
+            "timeout": 10
+          }
+        ]
+      },
       {
-        "matcher": "*",
-        "hooks": []
-      }
-    ],
-    "Stop": [
+        "matcher": "^my-cc-lite:verifier$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks/do-agent-chain.mjs\"",
+            "timeout": 10
+          }
+        ]
+      },
       {
-        "matcher": "*",
-        "hooks": []
+        "matcher": "^my-cc-lite:debugger$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks/do-agent-chain.mjs\"",
+            "timeout": 10
+          }
+        ]
       }
     ]
   }

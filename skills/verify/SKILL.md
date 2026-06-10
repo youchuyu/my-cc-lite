@@ -14,36 +14,25 @@ disable-model-invocation: true
 
 当用户手动调用 `/verify`，或明确要求验收当前 my-cc-lite 任务时使用。
 
-当前工作目录必须是目标项目根目录。项目必须已执行 `/init`，且 `.my-cc-lite/tasks/` 下只能有一个未归档任务目录。
+当前工作目录应是目标项目根目录。显式 `/verify` 的静态入口条件由 preflight hook 提前阻断，verify 阶段脚本也会再次硬校验。
 
 ## 进入条件
 
-正式验证前必须满足：
+进入 skill 后只做两件事：
 
-- 项目已初始化：`.my-cc-lite/project.json` 存在且结构合法。
-- 当前任务唯一：`.my-cc-lite/tasks/` 下刚好存在一个当前任务目录，且该目录下存在非空 `plan.md` 和结构合法的 `task.json`。
-- 当前任务可验收：`task.json.tasks[]` 非空，所有 `tasks[].status` 都是 `completed` 或 `skipped`，且至少存在一个 `completed` task。
-
-如果条件不满足，立即停止本次 `/verify`，不写入任何状态，并按以下方式提示下一步：
-
-- 没有当前任务，提示先执行 `/plan`。
-- 存在多个当前任务，提示状态异常，需要手动处理。
-- 缺少 `task.json`，提示先执行 `/do`。
-- 仍有 `pending`、`in_progress`、`blocked` 或 `failed` task，提示回到 `/do` 继续执行、修复或处理阻塞。
-- 所有 task 都是 `skipped`，提示回到 `/plan` 重新确认当前任务是否仍然成立。
+1. 基于脚本可读取的当前 `plan.md` 和 `task.json` 形成最终验收判断。
+2. 如果脚本返回入口条件错误，按错误码提示下一步，不自行修改状态文件。
 
 ## 执行步骤
 
-1. 读取 `.my-cc-lite/project.json`，确认项目已初始化。
-2. 装载当前任务上下文：扫描 `.my-cc-lite/tasks/` 确认唯一当前任务目录，并读取该目录下的 `plan.md` 和 `task.json`。
-3. 检查 verify 进入条件。
-4. 如果任一进入条件不满足，停止，不写状态，并说明下一步。
-5. 根据 `plan.md`、`task.json.objective`、`tasks[]` 和 `checks[]` 形成最终验收判断。
-6. 必要时委派 `verifier` 的 `final_verify` mode，或调用 `project.json.stageHelpers.review` 中明确匹配的 review helper。
-7. 必要时读取相关项目文件或运行轻量检查命令；这些上下文只服务本轮判断，不落盘。
-8. 在 `passed`、`needs_fix`、`blocked` 中选择一个结论。
-9. 调用 verify 阶段脚本执行 `complete`，通过 stdin 传入 JSON。
-10. 向用户返回结论、简短原因、写入摘要和下一步。
+1. 读取脚本可访问的当前 `plan.md` 和 `task.json` 上下文。
+2. 根据 `plan.md`、`task.json.objective`、`tasks[]` 和 `checks[]` 形成最终验收判断。
+3. 必要时委派 `verifier` 的 `final_verify` mode，或调用 `project.json.stageHelpers.review` 中明确匹配的 review helper。
+4. 必要时读取相关项目文件或运行轻量检查命令；这些上下文只服务本轮判断，不落盘。
+5. 在 `passed`、`needs_fix`、`blocked` 中选择一个结论。
+6. 调用 verify 阶段脚本执行 `complete`，通过 stdin 传入 JSON。
+7. 如果脚本返回入口条件或状态错误，停止并按错误码说明下一步。
+8. 向用户返回结论、简短原因、写入摘要和下一步。
 
 ## 判断依据
 

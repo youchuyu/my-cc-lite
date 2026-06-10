@@ -14,11 +14,11 @@ disable-model-invocation: true
 
 当用户手动调用 `/do`，或明确要求继续执行当前 my-cc-lite 任务时使用。
 
-当前工作目录必须是目标项目根目录。项目必须已执行 `/init`，且 `.my-cc-lite/tasks/` 下只能有一个未归档任务目录。
+当前工作目录应是目标项目根目录。显式 `/do` 的基础入口条件由 preflight hook 提前提示或阻断；进入 `/do` 后仍必须从 `scripts/run.mjs do inspect` 获取状态快照，并以脚本返回为准。
 
 ## 流程总览
 
-`/do` 每次从 `inspect` 开始，读取当前 active task 的状态快照。**入口检查**通过后，`/do` 先根据当前任务是否已经存在 `task.json` 分流：
+`/do` 每次从 `inspect` 开始，读取当前 active task 的状态快照。`/do` 先根据当前任务是否已经存在 `task.json` 分流：
 
 - 如果 `task.json` 不存在，进入**首次物化流程**。首次物化成功后，`/do` 基于完整 `task.json.tasks[]` 选择后续完整执行流程的**接管方式**。
 - 如果 `task.json` 已存在，`/do` 不重新选择接管方式，先进入**恢复状态检查**；只有本轮用户明确要求继续执行时，才进入 **my-cc-lite 原生状态接管**。
@@ -33,8 +33,8 @@ disable-model-invocation: true
 ## 入口检查
 
 1. 调用 `scripts/run.mjs do inspect`，读取当前 `/do` 状态快照。
-2. 如果 `inspect` 返回 `PROJECT_NOT_INITIALIZED`、`NO_ACTIVE_TASK`、`MULTIPLE_ACTIVE_TASKS` 或 `PLAN_NOT_FOUND`，按错误码提示用户处理，不自行绕过脚本扫描状态。
-3. 如果 `inspect` 成功，基于当前状态快照判断下一步流程：
+2. 如果 `inspect` 返回错误，按脚本错误码简短提示下一步，不自行扫描或修复状态。
+3. 如果 `inspect` 成功，只基于当前状态快照做静态路由：
 
 - `inspect.result.task.exists === false`：进入**首次物化流程**。
 - `inspect.result.task.exists === true`：根据 `inspect.result.task.tasks[]` 继续路由：

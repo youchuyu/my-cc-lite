@@ -14,26 +14,11 @@ disable-model-invocation: true
 
 当用户手动调用 `/archive`，或明确要求关闭、归档当前 my-cc-lite 任务时使用。
 
-当前工作目录必须是目标项目根目录。项目必须已执行 `/init`，且 `.my-cc-lite/tasks/` 下只能有一个未归档任务目录。
+当前工作目录应是目标项目根目录。显式 `/archive` 的静态入口条件由 preflight hook 提前阻断，archive 阶段脚本也会再次硬校验。
 
 ## 进入条件
 
-归档前必须满足：
-
-- 项目已初始化：`.my-cc-lite/project.json` 存在且结构合法。
-- 当前任务唯一：`.my-cc-lite/tasks/` 下刚好存在一个当前任务目录。
-- 当前任务目录存在非空 `plan.md`。
-- 当前任务目录存在结构合法的 `task.json`。
-- 当前任务尚未归档。
-- `.my-cc-lite/archived_tasks/<taskId>/` 不存在。
-
-如果条件不满足，停止本次 `/archive`，不写状态，并提示下一步：
-
-- 没有当前任务，提示先执行 `/plan`。
-- 存在多个当前任务，提示状态异常，需要手动处理。
-- 缺少 `plan.md`，提示回到 `/plan` 或手动修复状态文件。
-- 缺少 `task.json`，提示先执行 `/do` 物化任务。
-- 目标归档目录已存在，提示手动检查 `archived_tasks/<taskId>/`。
+进入 skill 后，重点处理归档语义、用户关闭意图和 `archive.summary`。如果 archive 阶段脚本返回入口条件或状态错误，按错误码提示下一步，不自行修改状态文件。
 
 ## 归档语义
 
