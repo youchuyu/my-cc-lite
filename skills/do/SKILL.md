@@ -14,7 +14,7 @@ disable-model-invocation: true
 
 当用户手动调用 `/do`，或明确要求继续执行当前 my-cc-lite 任务时使用。
 
-当前工作目录应是目标项目根目录。显式 `/do` 的基础入口条件由 preflight hook 提前提示或阻断；进入 `/do` 后仍必须从 `scripts/run.mjs do inspect` 获取状态快照，并以脚本返回为准。
+当前工作目录应是目标项目根目录。显式 `/do` 的基础入口硬门禁由 preflight hook 提前阻断；进入 `/do` 后仍必须从 `scripts/run.mjs do inspect` 获取状态快照，并以脚本返回为准。
 
 ## 流程总览
 
@@ -202,6 +202,7 @@ node <pluginRoot>/scripts/run.mjs do inspect
 - `TASK_ALREADY_MATERIALIZED`：读取现有 `task.json` 并进入恢复状态检查。
 - `TASK_STATE_NOT_FOUND`：只能在 `update-task` 时出现，先执行 materialize。
 - `TASK_NOT_FOUND`：不要隐式新增 task，提示回到 `/plan` 调整。
+- `INVALID_TASK_STATE`：当前 `task.json` 结构异常，需要手动检查状态文件。
 
 ## 完成反馈
 

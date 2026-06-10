@@ -12,6 +12,7 @@ const runScript = path.join(pluginRoot, "scripts", "run.mjs");
 const planScript = path.join(pluginRoot, "scripts", "plan.mjs");
 const doAgentChainHook = path.join(pluginRoot, "scripts", "hooks", "do-agent-chain.mjs");
 const stagePreflightHook = path.join(pluginRoot, "scripts", "hooks", "stage-preflight.mjs");
+const stageContextHook = path.join(pluginRoot, "scripts", "hooks", "stage-context.mjs");
 const targetDir = await mkdtemp(path.join(os.tmpdir(), "my-cc-lite-init-smoke-"));
 const targetRoot = await realpath(targetDir);
 const hookLogPath = path.join(targetDir, "my-cc-lite-hook.log");
@@ -142,6 +143,18 @@ function runStagePreflightHook(input, cwd = targetDir) {
   return parseOutput(result.stdout);
 }
 
+function runStageContextHook(input, cwd = targetDir) {
+  const result = spawnSync(process.execPath, [stageContextHook], {
+    cwd,
+    input: JSON.stringify(input),
+    encoding: "utf8"
+  });
+  if (result.status !== 0) {
+    throw new Error(`stage-context hook failed:\n${result.stdout || result.stderr}`);
+  }
+  return parseOutput(result.stdout);
+}
+
 function userPromptExpansion(commandName, cwd = targetDir) {
   return {
     session_id: "smoke-session",
@@ -163,9 +176,14 @@ function assertBlockedPreflight(payload, pattern) {
   assert.match(payload.reason, pattern);
 }
 
-function assertContextPreflight(payload, pattern) {
+function assertSilentPreflight(payload) {
   assert.equal(payload.continue, true);
-  assert.equal(payload.hookSpecificOutput.hookEventName, "UserPromptExpansion");
+  assert.equal(payload.suppressOutput, true);
+}
+
+function assertHookContext(payload, hookEventName, pattern) {
+  assert.equal(payload.continue, true);
+  assert.equal(payload.hookSpecificOutput.hookEventName, hookEventName);
   assert.match(payload.hookSpecificOutput.additionalContext, pattern);
 }
 
@@ -318,6 +336,9 @@ try {
   assert.equal(existsSync(path.join(targetDir, ".my-cc-lite", "project.json")), true);
   assert.equal(existsSync(path.join(targetDir, ".my-cc-lite", "tasks")), false);
 
+  const emptyPlanContextHook = runStageContextHook(userPromptExpansion("my-cc-lite:plan"));
+  assertSilentPreflight(emptyPlanContextHook);
+
   await wait(20);
   const second = runInit(
     JSON.stringify({
@@ -361,6 +382,12 @@ try {
             type: "agent",
             invoke: "workspace-runner",
             description: "Execute domain-specific implementation tasks during /do"
+          },
+          {
+            name: "implementation-skill",
+            type: "skill",
+            invoke: "implementation-skill",
+            description: "Help implement project-specific changes during /do"
           }
         ],
         review: [
@@ -383,7 +410,7 @@ try {
   );
   assert.deepEqual(
     second.project.stageHelpers.execution.map((helper) => helper.invoke),
-    ["workspace-runner"]
+    ["workspace-runner", "implementation-skill"]
   );
   assert.deepEqual(
     second.project.stageHelpers.review.map((helper) => helper.invoke),
@@ -444,6 +471,15 @@ try {
   for (const excludedName of ["Bash", "Plan", "my-cc-lite:plan"]) {
     assert.equal(helperTokens.includes(excludedName), false, `${excludedName} remained in stageHelpers`);
   }
+
+  const planContextHook = runStageContextHook(userPromptExpansion("my-cc-lite:plan"));
+  assertHookContext(planContextHook, "UserPromptExpansion", /可选 execution skills/);
+  assert.match(planContextHook.hookSpecificOutput.additionalContext, /implementation-skill/);
+  assert.doesNotMatch(planContextHook.hookSpecificOutput.additionalContext, /workspace-runner/);
+
+  const doContextHook = runStageContextHook(userPromptExpansion("my-cc-lite:do"));
+  assertSilentPreflight(doContextHook);
+
   assert.equal(existsSync(path.join(targetDir, ".my-cc-lite", "tasks")), false);
 
   const noActiveDoPreflightHook = runStagePreflightHook(userPromptExpansion("my-cc-lite:do"));
@@ -517,7 +553,7 @@ try {
   assert.equal(await readFile(path.join(targetDir, ".my-cc-lite", "project.json"), "utf8"), beforePlanProject);
 
   const firstMaterializationPreflightHook = runStagePreflightHook(userPromptExpansion("my-cc-lite:do"));
-  assertContextPreflight(firstMaterializationPreflightHook, /first materialization/);
+  assertSilentPreflight(firstMaterializationPreflightHook);
 
   const missingTaskStateError = runVerifyFail(
     JSON.stringify({
@@ -907,7 +943,7 @@ try {
   );
 
   const blockedArchivePreflightHook = runStagePreflightHook(userPromptExpansion("my-cc-lite:archive"));
-  assertContextPreflight(blockedArchivePreflightHook, /confirm that the user intends to close/);
+  assertSilentPreflight(blockedArchivePreflightHook);
 
   const invalidVerificationTaskJson = structuredClone(afterBlockedTaskJson);
   invalidVerificationTaskJson.verification.status = "legacy";

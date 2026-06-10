@@ -22,11 +22,8 @@ async function main() {
   const result = buildPreflightResult(stage, state);
   const message = result.message;
   writeDebugLog("result", { eventName, expansionType, commandName, stage, projectRoot, message }, "");
-  if (!message) {
-    return silentContinue();
-  }
   if (!result.block) {
-    return appendContext(`my-cc-lite preflight: ${message}`);
+    return silentContinue();
   }
 
   return blockExpansion(`my-cc-lite preflight: ${message}`);
@@ -129,16 +126,10 @@ function planResult(state) {
 function doResult(state) {
   const taskAvailability = currentTaskResult("do", state);
   if (taskAvailability) return taskAvailability;
-  if (!state.task.exists) {
-    return context("/do should enter first materialization because task.json is missing.");
+  if (state.task.exists && !state.task.valid) {
+    return block("task state is invalid; inspect .my-cc-lite/tasks/*/task.json before continuing.");
   }
-  if (!state.task.valid) {
-    return context("task state is invalid; /do should rely on the stage script hard check before updating state.");
-  }
-  if (state.task.unfinishedTasks.length === 0) {
-    return context("all task entries are completed or skipped; move to /verify instead of continuing execution.");
-  }
-  return context("/do should enter recovery check because task.json already exists; do not rematerialize.");
+  return noMessage();
 }
 
 function verifyResult(state) {
@@ -173,9 +164,6 @@ function archiveResult(state) {
   if (state.archive.targetExists) {
     return block("archive target already exists; inspect .my-cc-lite/archived_tasks before archiving.");
   }
-  if (state.task.verificationStatus !== "passed") {
-    return context("verification.status is not passed; /archive may close the task, but the skill should confirm that the user intends to close an incomplete or unverified task.");
-  }
   return noMessage();
 }
 
@@ -206,13 +194,6 @@ function block(message) {
   };
 }
 
-function context(message) {
-  return {
-    block: false,
-    message
-  };
-}
-
 function noMessage() {
   return {
     block: false,
@@ -232,16 +213,6 @@ function blockExpansion(message) {
     continue: true,
     decision: "block",
     reason: message
-  };
-}
-
-function appendContext(message) {
-  return {
-    continue: true,
-    hookSpecificOutput: {
-      hookEventName: "UserPromptExpansion",
-      additionalContext: message
-    }
   };
 }
 
