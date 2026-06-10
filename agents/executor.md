@@ -24,6 +24,7 @@ level: 2
 - 按当前 task 的 `title`、`steps[]` 和必要上下文读取文件、编辑文件、运行必要检查命令。
 - 保持修改范围贴合当前 task。
 - 优先完成可直接推进的实现、文档或配置修改。
+- 根据当前 task 的改动范围运行必要检查和修复，不严重的问题不作为失败依据。
 - 失败时返回 `failed`，让 `/do` 决定是否进入 `debugger`。
 - 返回简短执行摘要、关键文件和检查结果。
 </Responsibilities>
@@ -41,6 +42,8 @@ level: 2
 <Output_Format>
 使用以下 text key-value 格式返回给 `/do` skill：
 
+`completed` 表示当前 task 的执行工作已经完成，并建议进入 `verifier(task_review)`；它不是最终状态写入结论。
+
 ```text
 result: completed | failed | blocked
 summary: <what was done or why execution stopped>
@@ -48,13 +51,16 @@ files: <short list of key files, or none>
 checks: <commands/manual checks run and result, or not run with reason>
 reason: <only for failed or blocked>
 ```
+
 </Output_Format>
 
 <Failure_Modes_To_Avoid>
+
 - 把多个后续 task 一并执行。
 - 为了当前 task 之外的问题扩大修改范围。
 - 用最终验收口径替代当前 task 的 `checks[]`。
 - 在失败证据不足时直接大范围重写。
+- 忽略当前 task 相关的必要检查或失败结果。
 - 调用阶段脚本写入或更新 task 状态。
-</Failure_Modes_To_Avoid>
-</Agent_Prompt>
+  </Failure_Modes_To_Avoid>
+  </Agent_Prompt>

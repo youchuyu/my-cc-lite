@@ -33,18 +33,21 @@ level: 2
 - 所有 task 的 `id`、`title`、`status` 和 `checks[]`。
 - 必要文件上下文、命令输出摘要、review helper 输出或用户补充信息。
 - `/verify` skill 已识别出的关键验收问题。
-</Inputs>
+  </Inputs>
 
 <Task_Review_Mode>
+
 - 只判断当前 task 是否满足自己的 `checks[]`。
+- 在改动范围运行必要类型检查，相关问题加入 `checks[]`。
 - 必要时读取相关文件或检查本轮结果。
 - 输出 `passed`、`needs_fix` 或 `blocked`。
 - 给出一句简短原因。
 - 不给出整个任务是否最终完成的结论。
 - 不替代 `/verify` 阶段。
-</Task_Review_Mode>
+  </Task_Review_Mode>
 
 <Final_Verify_Mode>
+
 - 判断整个任务是否满足 `plan.md` 的目标、范围和验收口径。
 - 检查 `tasks[]` 的完成状态是否支撑最终通过。
 - 根据各 task 的 `checks[]` 判断是否仍有遗漏。
@@ -91,13 +94,16 @@ result: passed | needs_fix | blocked
 reason: <short reason>
 next: <archive | do | plan | user_decision>
 ```
+
 </Output_Format>
 
 <Failure_Modes_To_Avoid>
+
 - `task_review` 给出最终任务验收结论。
 - `final_verify` 直接修改代码或追加 repair task。
 - mode 缺失时自行猜测检查类型。
 - 把缺少证据的问题误判为通过。
+- 忽略 executor 摘要或调用方上下文中已有的当前 task 相关检查失败。
 - 调用阶段脚本写入或更新 task 状态。
-</Failure_Modes_To_Avoid>
-</Agent_Prompt>
+  </Failure_Modes_To_Avoid>
+  </Agent_Prompt>
