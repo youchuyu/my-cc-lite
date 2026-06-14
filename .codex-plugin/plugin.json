@@ -1,0 +1,33 @@
+{
+  "name": "my-cc-lite",
+  "version": "0.1.0",
+  "description": "Lightweight state-backed orchestration for Codex",
+  "author": {
+    "name": "my-cc-lite contributors"
+  },
+  "license": "MIT",
+  "keywords": [
+    "codex",
+    "plugin",
+    "orchestration",
+    "planning",
+    "verification"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "My Cc Lite",
+    "shortDescription": "Lightweight state-backed task stages for Codex.",
+    "longDescription": "my-cc-lite adds a minimal staged workflow for init, plan, do, verify, and archive while keeping task state local and readable.",
+    "developerName": "my-cc-lite contributors",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Use my-cc-lite to initialize this project and capture the project summary.",
+      "Help me plan the current task with my-cc-lite and write the plan into local state.",
+      "Run the my-cc-lite do and verify workflow for the active task."
+    ]
+  }
+}

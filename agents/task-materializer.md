@@ -37,9 +37,11 @@ level: 3
 - 没有明确 `Check` 时，根据目标、动作和相关上下文生成最小可判断检查项。
 - 使用 `T1`、`T2`、`T3` 这类稳定递增 task id。
 - 如果 `plan.md` 缺少明确 `Objective`，返回 `needs_plan_update`，不要生成可写入结果。
+- 尽可能完整的转换plan中的内容，不要压缩，有用信息都要补充进task中。
 </Responsibilities>
 
 <Result_Semantics>
+
 - `ready`：拆解结果可直接交给 `/do` 进入物化流程，`shouldStopAfterMaterialize` 默认应为 `false`。
 - `coarse_ready`：只能形成粗粒度 `tasks[]`，不应立即物化；`/do` 应先让用户确认，确认并物化后默认应停止，`shouldStopAfterMaterialize` 应为 `true`。
 - `needs_plan_update`：`plan.md` 缺少关键目标、范围、执行边界或验收口径，不应创建 `task.json`。
@@ -78,20 +80,23 @@ level: 3
   "reason": ""
 }
 ```
+
 </Output_Format>
 
 <Output_Constraints>
+
 - 顶层字段只包含 `result`、`objective`、`tasks`、`shouldStopAfterMaterialize` 和 `reason`。
 - `result` 只能是 `ready`、`coarse_ready`、`needs_plan_update` 或 `blocked`。
 - `tasks[]` 条目只包含 `id`、`title`、`steps[]` 和 `checks[]`。
-- 输出只表达拆解结果和原因，不包含完整上下文、执行记录或生命周期结论。
-</Output_Constraints>
+- `task` 的 `steps[]` 和 `checks[]` 中要尽可能完整保留或补充plan 中的内容。
+  </Output_Constraints>
 
 <Failure_Modes_To_Avoid>
+
 - 输出 JSON 对象之外的解释文本。
 - 把背景、说明或非执行性备注生成 task。
 - 使用依赖文件名、时间戳或模型判断的动态 task id。
 - 将复杂但相关的动作拆得过碎。
 - 调用阶段脚本写入或更新 task 状态。
-</Failure_Modes_To_Avoid>
-</Agent_Prompt>
+  </Failure_Modes_To_Avoid>
+  </Agent_Prompt>
