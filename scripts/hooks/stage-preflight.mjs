@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
-import { appendFileSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
+import { writeHookLog } from "../lib/hook-log.mjs";
 import { readPreflightState } from "../lib/preflight.mjs";
 
 const STAGES = new Set(["init", "plan", "do", "verify", "archive"]);
@@ -11,7 +12,13 @@ async function main() {
   const expansionType = input.expansion_type || input.expansionType;
   const commandName = input.command_name || input.commandName;
   const stage = normalizeStage(commandName);
-  writeDebugLog("enter", { eventName, expansionType, commandName, stage, cwd: input.cwd }, rawContent);
+  writeHookLog({
+    hook: "stage-preflight",
+    event: eventName,
+    label: "enter",
+    fields: { expansion: expansionType, command: commandName, stage, cwd: input.cwd },
+    rawContent
+  });
 
   if (eventName !== "UserPromptExpansion" || expansionType !== "slash_command" || !stage) {
     return silentContinue();
@@ -21,7 +28,13 @@ async function main() {
   const state = await readPreflightState(projectRoot);
   const result = buildPreflightResult(stage, state);
   const message = result.message;
-  writeDebugLog("result", { eventName, expansionType, commandName, stage, projectRoot, message }, "");
+  writeHookLog({
+    hook: "stage-preflight",
+    event: eventName,
+    label: "result",
+    fields: { expansion: expansionType, command: commandName, stage, cwd: projectRoot, message },
+    rawContent
+  });
   if (!result.block) {
     return silentContinue();
   }
@@ -47,30 +60,6 @@ function readHookStdinJson() {
       input: {},
       rawContent: content
     };
-  }
-}
-
-function writeDebugLog(label, fields, rawContent) {
-  const logPath = process.env.MY_CC_LITE_HOOK_LOG || "my-cc-lite-hook.log";
-  const entry = [
-    `time: ${new Date().toISOString()}`,
-    "hook: stage-preflight",
-    `label: ${label}`,
-    `event: ${fields.eventName || ""}`,
-    `expansion: ${fields.expansionType || ""}`,
-    `command: ${fields.commandName || ""}`,
-    `stage: ${fields.stage || ""}`,
-    `cwd: ${fields.cwd || fields.projectRoot || ""}`,
-    `message: ${fields.message || ""}`,
-    "input:",
-    rawContent || "",
-    "---"
-  ].join("\n");
-
-  try {
-    appendFileSync(logPath, `${entry}\n`, "utf8");
-  } catch (error) {
-    console.error(`my-cc-lite stage preflight log write failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -218,6 +207,20 @@ function blockExpansion(message) {
 
 try {
   process.stdout.write(`${JSON.stringify(await main(), null, 2)}\n`);
-} catch {
-  process.stdout.write(`${JSON.stringify(silentContinue(), null, 2)}\n`);
+} catch (error) {
+  writeHookLog({
+    hook: "stage-preflight",
+    event: "stage-preflight",
+    label: "exception",
+    fields: {
+      error: error instanceof Error ? error.message : String(error)
+    }
+  });
+  process.stdout.write(
+    `${JSON.stringify(
+      blockExpansion("my-cc-lite preflight failed; inspect the plugin hook script or hook log before continuing."),
+      null,
+      2
+    )}\n`
+  );
 }

@@ -235,6 +235,22 @@ try {
   assert.equal(ignoredHook.continue, true);
   assert.equal(ignoredHook.suppressOutput, true);
 
+  const ignoredUnknownAgentHook = runDoAgentChainHook({
+    hook_event_name: "SubagentStop",
+    agent_type: "general-purpose",
+    last_assistant_message: "result: completed"
+  });
+  assert.equal(ignoredUnknownAgentHook.continue, true);
+  assert.equal(ignoredUnknownAgentHook.suppressOutput, true);
+
+  const ignoredEmptyAgentHook = runDoAgentChainHook({
+    hook_event_name: "SubagentStop",
+    agent_type: "",
+    last_assistant_message: "result: completed"
+  });
+  assert.equal(ignoredEmptyAgentHook.continue, true);
+  assert.equal(ignoredEmptyAgentHook.suppressOutput, true);
+
   const ignoredPreflightHook = runStagePreflightHook(userPromptExpansion("other-plugin:do"));
   assert.equal(ignoredPreflightHook.continue, true);
   assert.equal(ignoredPreflightHook.suppressOutput, true);
@@ -337,7 +353,7 @@ try {
   assert.equal(existsSync(path.join(targetDir, ".my-cc-lite", "tasks")), false);
 
   const emptyPlanContextHook = runStageContextHook(userPromptExpansion("my-cc-lite:plan"));
-  assertSilentPreflight(emptyPlanContextHook);
+  assertHookContext(emptyPlanContextHook, "UserPromptExpansion", /projectSummary: First summary\./);
 
   await wait(20);
   const second = runInit(
@@ -417,6 +433,13 @@ try {
     ["code-review"]
   );
 
+  const secondPlanContextHook = runStageContextHook(userPromptExpansion("my-cc-lite:plan"));
+  assertHookContext(secondPlanContextHook, "UserPromptExpansion", /projectSummary: Second summary\./);
+  assert.match(secondPlanContextHook.hookSpecificOutput.additionalContext, /planning helpers:/);
+  assert.match(secondPlanContextHook.hookSpecificOutput.additionalContext, /codegraph_context: Collect code context before \/plan drafts implementation tasks/);
+  assert.match(secondPlanContextHook.hookSpecificOutput.additionalContext, /optional execution skills for later \/do:/);
+  assert.match(secondPlanContextHook.hookSpecificOutput.additionalContext, /implementation-skill: Help implement project-specific changes during \/do/);
+
   const beforeMalformed = await readFile(path.join(targetDir, ".my-cc-lite", "project.json"), "utf8");
   const malformedError = runInitFail("not json");
   assert.equal(malformedError.code, "INVALID_INPUT");
@@ -473,7 +496,8 @@ try {
   }
 
   const planContextHook = runStageContextHook(userPromptExpansion("my-cc-lite:plan"));
-  assertHookContext(planContextHook, "UserPromptExpansion", /可选 execution skills/);
+  assertHookContext(planContextHook, "UserPromptExpansion", /projectSummary: Second summary\./);
+  assert.match(planContextHook.hookSpecificOutput.additionalContext, /planning helpers/);
   assert.match(planContextHook.hookSpecificOutput.additionalContext, /implementation-skill/);
   assert.doesNotMatch(planContextHook.hookSpecificOutput.additionalContext, /workspace-runner/);
 

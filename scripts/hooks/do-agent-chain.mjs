@@ -1,14 +1,19 @@
 #!/usr/bin/env node
 
-import { appendFileSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
+import { writeHookLog } from "../lib/hook-log.mjs";
 
 function main() {
   const { input, rawContent } = readHookStdinJson();
   const eventName = input.hook_event_name || input.hookEventName;
   const agentType = normalizeAgentType(input.agent_type || input.agentType);
-  writeDebugLog(eventName, agentType, rawContent);
+  writeHookLog({ hook: "do-agent-chain", event: eventName, fields: { agent: agentType }, rawContent });
 
   if (eventName !== "SubagentStop") {
+    return silentContinue();
+  }
+
+  if (!isTrackedAgentType(agentType)) {
     return silentContinue();
   }
 
@@ -39,24 +44,6 @@ function readHookStdinJson() {
       input: {},
       rawContent: content
     };
-  }
-}
-
-function writeDebugLog(eventName, agentType, rawContent) {
-  const logPath = process.env.MY_CC_LITE_HOOK_LOG || "my-cc-lite-hook.log";
-  const entry = [
-    `time: ${new Date().toISOString()}`,
-    `event: ${eventName || ""}`,
-    `agent: ${agentType || ""}`,
-    "input:",
-    rawContent || "",
-    "---"
-  ].join("\n");
-
-  try {
-    appendFileSync(logPath, `${entry}\n`, "utf8");
-  } catch (error) {
-    console.error(`my-cc-lite hook log write failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -95,6 +82,10 @@ function buildAgentSignal(agentType, fields) {
     return debuggerSignal(fields);
   }
   return "";
+}
+
+function isTrackedAgentType(agentType) {
+  return agentType === "executor" || agentType === "verifier" || agentType === "debugger";
 }
 
 function executorSignal(fields) {

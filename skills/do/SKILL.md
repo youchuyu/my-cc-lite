@@ -75,8 +75,8 @@ inspect.result.task.exists === false
 
 流程：
 
-1. 调用 `task-materializer`，提供完整 `plan.md`、当前 task 目录路径和首次物化约束。
-2. 根据 `task-materializer` 返回的 `result` 字段判断物化结果：
+1. 调用 agent `task-materializer`，提供完整 `plan.md`、当前 task 目录路径和首次物化约束。
+2. 根据 agent `task-materializer` 返回的 `result` 字段判断物化结果：
 
 - 如果 `result` 是 `ready`，提取 `objective` 和 `tasks[]` 调用 `scripts/run.mjs do materialize`，成功后重新 `inspect`。
 - 如果 `result` 是 `coarse_ready`，先展示 `reason` 和候选拆解并请求用户确认；确认后才允许物化。
@@ -86,8 +86,8 @@ inspect.result.task.exists === false
 
 职责边界：
 
-- `/do` 只负责把 `plan` 相关内容交给 `task-materializer`。
-- `/do` 只负责把 `task-materializer` 产出的 `objective` 和 `tasks[]` 写入项目状态。
+- `/do` 只负责把 `plan` 相关内容交给 agent `task-materializer`。
+- `/do` 只负责把 agent `task-materializer` 产出的 `objective` 和 `tasks[]` 写入项目状态。
 - `/do` 不重新解释 `plan.md`，不调整任务拆解，也不持久化流程判断字段。
 
 ### 物化后选择接管方式
@@ -104,7 +104,7 @@ task.json 首次物化成功，并且 /do 已重新 inspect 拿到完整 task.js
 
 如果存在合适的外部接管方式，`/do` 应向用户说明候选项、适用性和风险，并让用户选择。否则默认进入 **my-cc-lite 原生状态接管**。
 
-`Read`、`Write`、`Edit`、`Bash` 等原子工具不作为接管方式；my-cc-lite 内置的 `executor`、`verifier`、`debugger` 也不作为外部接管方式。
+`Read`、`Write`、`Edit`、`Bash` 等原子工具不作为接管方式；my-cc-lite 内置的 agent `executor`、agent `verifier`、agent `debugger` 也不作为外部接管方式。
 
 接管方式只影响本轮 `/do` 的执行编排选择，不写入状态文件；已有 `task.json` 的后续执行只在用户明确继续时回到 **my-cc-lite 原生状态接管**。
 
@@ -112,7 +112,7 @@ task.json 首次物化成功，并且 /do 已重新 inspect 拿到完整 task.js
 
 用于首次物化后选择原生状态接管，或已有 `task.json` 且用户明确继续执行时。按 `reference/native-control.md` 执行，并遵守 `reference/state-boundary.md`。
 
-原生状态接管中，executor 返回 `completed` 后必须经过 `verifier(task_review)`；只有 verifier 返回 `passed`，`/do` 才允许写入 `tasks[].status: "completed"`。
+原生状态接管中，agent `executor` 返回 `completed` 后必须经过 agent `verifier` 的 `task_review` mode；只有 agent `verifier` 返回 `passed`，`/do` 才允许写入 `tasks[].status: "completed"`。
 
 ## 外部高阶流程接管
 
@@ -157,7 +157,7 @@ node <pluginRoot>/scripts/run.mjs do inspect
 }
 ```
 
-如果 `task-materializer` 返回的是带流程控制字段的完整结果，调用 `materialize` 前只传入 `objective` 和 `tasks`。`result`、`shouldStopAfterMaterialize` 和 `reason` 只由 `/do` skill 用于流程判断，不传给脚本。
+如果 agent `task-materializer` 返回的是带流程控制字段的完整结果，调用 `materialize` 前只传入 `objective` 和 `tasks`。`result`、`shouldStopAfterMaterialize` 和 `reason` 只由 `/do` skill 用于流程判断，不传给脚本。
 
 状态更新：
 
@@ -180,29 +180,25 @@ node <pluginRoot>/scripts/run.mjs do inspect
 
 遇到无法可靠继续、需要用户决策、需要修改任务结构或已经完成全部 task 时，必须停止并说明原因。
 
-## 禁止事项
+## 能力约束
 
-`/do` 不做以下事情：
+`/do` 只负责以下能力边界内的事情：
 
-- 不创建新的 active task。
-- 不自动同步后续手改的 `plan.md` 到已有 `task.json.tasks[]`。
-- 不新增、删除、重排、合并或拆分已有 `tasks[]`。
-- 不保存 agent prompt、完整响应、命令日志、changed files 或 check 级结果。
-- 不调用 `/verify`、不标记最终通过、不自动归档。
-- 不让 executor、verifier、debugger 直接调用 `scripts/run.mjs do ...`、直接调用 `scripts/do.mjs` 或读写 `task.json`。
-- 不让外部流程绕过受限 `update-task` 接口直接读写 `task.json`。
-- `/do` 不自行读取业务代码、修改业务代码或运行项目检查命令；这些只可能发生在 `/do` 交接出去的执行方内部，不属于 `/do` 状态编排流程。
+- 读取当前 `/do` 状态快照，并基于 `inspect` 结果做静态路由、恢复判断和执行交接。
+- 在首次物化时，只把 `plan.md` 交给 agent `task-materializer`，并把返回的 `objective` 和 `tasks[]` 通过受限脚本接口写入状态。
+- 在执行阶段，只推进当前 task 的 task 级执行状态；不调整 `tasks[]` 结构，不改写 `plan.md`，也不推进 `/verify`、归档或其他后续阶段状态。
+- 所有状态写入都只能通过 `scripts/run.mjs do materialize` 和 `scripts/run.mjs do update-task` 完成；agent `executor`、agent `verifier`、agent `debugger` 和外部流程都不能直接读写 `task.json`。
+- 询问用户问题时优先使用 AskUserQuestion
+
+业务代码的读取、修改和检查只发生在 `/do` 交接出去的执行方内部，不属于 `/do` 自身能力。
 
 ## 错误处理
 
-- `PROJECT_NOT_INITIALIZED`：提示先执行 `/init`。
-- `NO_ACTIVE_TASK`：提示先执行 `/plan`。
-- `MULTIPLE_ACTIVE_TASKS`：提示当前状态异常，需要手动处理多 active task。
-- `PLAN_NOT_FOUND`：提示当前 task 缺少 `plan.md`，回到 `/plan` 或手动修复。
+- 显式 `/do` 的基础入口错误通常由 preflight hook 提前阻断；如果 `inspect` 仍返回这类错误，以脚本返回为准，简短提示下一步，不自行扫描或修复状态。
 - `TASK_ALREADY_MATERIALIZED`：读取现有 `task.json` 并进入恢复状态检查。
 - `TASK_STATE_NOT_FOUND`：只能在 `update-task` 时出现，先执行 materialize。
 - `TASK_NOT_FOUND`：不要隐式新增 task，提示回到 `/plan` 调整。
-- `INVALID_TASK_STATE`：当前 `task.json` 结构异常，需要手动检查状态文件。
+- `INVALID_TASK_STATE`：当前 `task.json` 结构异常，或运行期状态与预期不一致，需要手动检查状态文件。
 
 ## 完成反馈
 

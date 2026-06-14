@@ -19,5 +19,5 @@ my-cc-lite 原生接管和外部高阶接管共享同一套状态边界。
 
 - 常规路径是 `pending -> in_progress -> completed | blocked | failed`。
 - `blocked -> in_progress` 需要用户确认，或执行方能明确判断阻塞条件已经解除。
-- `failed -> in_progress` 需要明确重试意图，或 debugger / 外部流程已给出可继续执行的最小修复路径。
+- `failed -> in_progress` 需要明确重试意图，或 agent `debugger` / 外部流程已给出可继续执行的最小修复路径。
 - `completed` 和 `skipped` 默认不回退；只有用户明确要求重新执行，或回到 `/plan` 调整计划后，才允许重新进入执行路径。

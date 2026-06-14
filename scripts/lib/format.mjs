@@ -2,6 +2,24 @@ export function nowIso() {
   return new Date().toISOString();
 }
 
+export function formatLocalTimestamp(date = new Date()) {
+  const pad = (n) => String(n).padStart(2, "0");
+  const yyyy = date.getFullYear();
+  const mm = pad(date.getMonth() + 1);
+  const dd = pad(date.getDate());
+  const HH = pad(date.getHours());
+  const MM = pad(date.getMinutes());
+  const SS = pad(date.getSeconds());
+
+  const offsetMinutes = -date.getTimezoneOffset();
+  const sign = offsetMinutes >= 0 ? "+" : "-";
+  const abs = Math.abs(offsetMinutes);
+  const tzH = pad(Math.floor(abs / 60));
+  const tzM = pad(abs % 60);
+
+  return `${yyyy}-${mm}-${dd} ${HH}:${MM}:${SS} ${sign}${tzH}${tzM}`;
+}
+
 export function createTaskId(objective, options = {}) {
   const date = options.date || new Date();
   const suffix = options.suffix ? `-${options.suffix}` : "";

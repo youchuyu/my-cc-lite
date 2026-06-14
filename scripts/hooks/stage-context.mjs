@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { readFileSync } from "node:fs";
+import { writeHookLog } from "../lib/hook-log.mjs";
 import { validateProject } from "../lib/schema.mjs";
 import { readProject } from "../lib/state.mjs";
 
@@ -10,21 +11,38 @@ const CONTEXT_BUILDERS = {
   do: () => "",
   verify: () => "",
   archive: () => "",
-  init: () => ""
+  init: () => "",
 };
 
 async function main() {
-  const { input } = readHookStdinJson();
+  const { input, rawContent } = readHookStdinJson();
   const eventName = input.hook_event_name || input.hookEventName;
   const expansionType = input.expansion_type || input.expansionType;
   const commandName = input.command_name || input.commandName;
   const stage = normalizeStage(commandName);
+  writeHookLog({
+    hook: "stage-context",
+    event: eventName,
+    label: "enter",
+    fields: {
+      expansion: expansionType,
+      command: commandName,
+      stage,
+      cwd: input.cwd,
+    },
+    rawContent,
+  });
 
-  if (eventName !== "UserPromptExpansion" || expansionType !== "slash_command" || !stage) {
+  if (
+    eventName !== "UserPromptExpansion" ||
+    expansionType !== "slash_command" ||
+    !stage
+  ) {
     return silentContinue();
   }
 
-  const project = await readValidProject(input.cwd || process.cwd());
+  const projectRoot = input.cwd || process.cwd();
+  const project = await readValidProject(projectRoot);
   if (!project) {
     return silentContinue();
   }
@@ -35,31 +53,82 @@ async function main() {
     return silentContinue();
   }
 
+  writeHookLog({
+    hook: "stage-context",
+    event: eventName,
+    label: "context",
+    fields: {
+      expansion: expansionType,
+      command: commandName,
+      stage,
+      cwd: projectRoot,
+      contextLines: context.split("\n").length,
+      context,
+    },
+    rawContent,
+  });
   return appendContext("UserPromptExpansion", context);
 }
 
 function buildPlanContext(project) {
+  const planningHelpers = selectStageHelpers(project, {
+    sourceStage: "planning",
+  });
   const executionSkills = selectStageHelpers(project, {
     sourceStage: "execution",
-    type: "skill"
+    type: "skill",
   });
+
+  if (
+    !project.projectSummary &&
+    planningHelpers.length === 0 &&
+    executionSkills.length === 0
+  ) {
+    return "";
+  }
+
+  const sections = [
+    `- projectSummary: ${project.projectSummary}`,
+    buildPlanningHelpersPrompt(planningHelpers),
+    buildExecutionSkillsPrompt(executionSkills),
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  return sections;
+}
+
+function buildPlanningHelpersPrompt(planningHelpers) {
+  if (planningHelpers.length === 0) {
+    return "";
+  }
+
+  return [
+    "- planning helpers:",
+    ...planningHelpers.map(
+      (helper) => `${helper.name}: ${helper.description}；`,
+    ),
+    "这些 planning helpers 可作为 /plan 阶段的参考能力。",
+  ].join("\n");
+}
+
+function buildExecutionSkillsPrompt(executionSkills) {
   if (executionSkills.length === 0) {
     return "";
   }
 
   return [
-    "my-cc-lite plan context: 当前项目声明了后续 /do 可选使用的 execution skills。",
-    "",
-    "在 /plan 阶段，如果某个 skill 明确适合某个计划项，可以把它写入 plan.md 作为执行建议。不要在 /plan 阶段调用这些 skills，也不要把它们写成必须执行的路由。",
-    "",
-    "可选 execution skills：",
-    ...executionSkills.map((helper) => `- ${helper.name}: ${helper.description}`)
+    "- execution skills:",
+    ...executionSkills.map(
+      (helper) => `  ${helper.name}: ${helper.description}；`,
+    ),
+    "如果某个 execution skill 明确适合某个任务，可以在该任务描述里声明后续使用；不要在 /plan 阶段调用这些 skills。",
   ].join("\n");
 }
 
 function selectStageHelpers(project, { sourceStage, type }) {
   return (project.stageHelpers?.[sourceStage] ?? [])
-    .filter((helper) => helper.type === type)
+    .filter((helper) => !type || helper.type === type)
     .map(({ name, invoke, description }) => ({ name, invoke, description }));
 }
 
@@ -78,16 +147,19 @@ function readHookStdinJson() {
   const content = readFileSync(0, "utf8");
   if (!content.trim()) {
     return {
-      input: {}
+      input: {},
+      rawContent: "",
     };
   }
   try {
     return {
-      input: JSON.parse(content)
+      input: JSON.parse(content),
+      rawContent: content,
     };
   } catch {
     return {
-      input: {}
+      input: {},
+      rawContent: content,
     };
   }
 }
@@ -102,7 +174,7 @@ function normalizeStage(commandName) {
 function silentContinue() {
   return {
     continue: true,
-    suppressOutput: true
+    suppressOutput: true,
   };
 }
 
@@ -111,8 +183,8 @@ function appendContext(hookEventName, message) {
     continue: true,
     hookSpecificOutput: {
       hookEventName,
-      additionalContext: message
-    }
+      additionalContext: message,
+    },
   };
 }
 
