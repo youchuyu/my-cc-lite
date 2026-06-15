@@ -8,7 +8,7 @@
 
 ## Hook-assisted chaining experiment
 
-`SubagentStop` hook 可以在 agent `executor`、agent `verifier` 或 agent `debugger` 返回后提供下一步提示，用来提醒 `/do` 继续进入 agent `verifier`、agent `debugger`、agent `executor` 或状态写入步骤。
+`SubagentStop` hook 可以在 agent `executor`、agent `verifier`、agent `debugger` 或 agent `task-materializer` 返回后提供下一步提示，用来提醒 `/do` 继续进入 agent `verifier`、agent `debugger`、agent `executor`、状态写入步骤，或在物化后只传入 `objective` 和 `tasks[]` 而不传控制字段。
 
 hook 输出只作为流程提示；`/do` 仍负责 agent 调度判断和所有状态写入。如果 hook 提示与本文件规则冲突，以本文件规则为准。
 

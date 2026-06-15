@@ -81,11 +81,19 @@ function buildAgentSignal(agentType, fields) {
   if (agentType === "debugger") {
     return debuggerSignal(fields);
   }
+  if (agentType === "task-materializer") {
+    return taskMaterializerSignal(fields);
+  }
   return "";
 }
 
 function isTrackedAgentType(agentType) {
-  return agentType === "executor" || agentType === "verifier" || agentType === "debugger";
+  return (
+    agentType === "executor" ||
+    agentType === "verifier" ||
+    agentType === "debugger" ||
+    agentType === "task-materializer"
+  );
 }
 
 function executorSignal(fields) {
@@ -140,6 +148,20 @@ function debuggerSignal(fields) {
     return "debugger returned blocked; stop for user decision or write blocked with a short statusReason if the task cannot continue.";
   }
   return "debugger output did not contain a recognized result; stop and request a corrected debugger response before updating task state.";
+}
+
+function taskMaterializerSignal(fields) {
+  const result = normalizeValue(fields.result);
+  if (result === "ready") {
+    return "task-materializer returned ready; call scripts/run.mjs do materialize passing only objective and tasks[] — do not pass result, shouldStopAfterMaterialize, or reason.";
+  }
+  if (result === "coarse_ready") {
+    return "task-materializer returned coarse_ready; show reason and candidate breakdown to user for confirmation before calling materialize.";
+  }
+  if (result === "needs_plan_update" || result === "blocked") {
+    return `task-materializer returned ${result}; do not call materialize, explain the reason and stop.`;
+  }
+  return "task-materializer output did not contain a recognized result; stop and request a corrected task-materializer response before materializing.";
 }
 
 function normalizeValue(value) {

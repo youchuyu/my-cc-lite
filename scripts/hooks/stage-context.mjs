@@ -3,13 +3,13 @@
 import { readFileSync } from "node:fs";
 import { writeHookLog } from "../lib/hook-log.mjs";
 import { validateProject } from "../lib/schema.mjs";
-import { readProject } from "../lib/state.mjs";
+import { getCurrentTaskDir, readProject, readTask } from "../lib/state.mjs";
 
 const STAGES = new Set(["init", "plan", "do", "verify", "archive"]);
 const CONTEXT_BUILDERS = {
   plan: buildPlanContext,
-  do: () => "",
-  verify: () => "",
+  do: buildDoContext,
+  verify: buildVerifyContext,
   archive: () => "",
   init: () => "",
 };
@@ -48,7 +48,7 @@ async function main() {
   }
 
   const builder = CONTEXT_BUILDERS[stage];
-  const context = builder ? builder(project) : "";
+  const context = builder ? await builder(project, projectRoot) : "";
   if (!context) {
     return silentContinue();
   }
@@ -70,7 +70,7 @@ async function main() {
   return appendContext("UserPromptExpansion", context);
 }
 
-function buildPlanContext(project) {
+function buildPlanContext(project, _projectRoot) {
   const planningHelpers = selectStageHelpers(project, {
     sourceStage: "planning",
   });
@@ -123,6 +123,53 @@ function buildExecutionSkillsPrompt(executionSkills) {
       (helper) => `  ${helper.name}: ${helper.description}；`,
     ),
     "如果某个 execution skill 明确适合某个任务，可以在该任务描述里声明后续使用；不要在 /plan 阶段调用这些 skills。",
+  ].join("\n");
+}
+
+async function buildDoContext(_project, projectRoot) {
+  let taskDir;
+  try {
+    taskDir = await getCurrentTaskDir(projectRoot);
+  } catch {
+    return "";
+  }
+  if (!taskDir) {
+    return "my-cc-lite /do 入口状态:\n- task.exists: false";
+  }
+  const task = await readTask(taskDir).catch(() => null);
+  if (!task) {
+    return "my-cc-lite /do 入口状态:\n- task.exists: false";
+  }
+  const taskLines = task.tasks.map(
+    (t) => `  - ${t.id} [${t.status}]: "${t.title}"${t.statusReason ? ` (${t.statusReason})` : ""}`
+  );
+  return [
+    "my-cc-lite /do 入口状态:",
+    `- task.exists: true, status: ${task.status}, stage: ${task.stage}`,
+    "- tasks:",
+    ...taskLines,
+  ].join("\n");
+}
+
+async function buildVerifyContext(_project, projectRoot) {
+  let taskDir;
+  try {
+    taskDir = await getCurrentTaskDir(projectRoot);
+  } catch {
+    return "";
+  }
+  if (!taskDir) return "";
+  const task = await readTask(taskDir).catch(() => null);
+  if (!task) return "";
+  const taskLines = task.tasks.map(
+    (t) => `  - ${t.id} [${t.status}]: "${t.title}"`
+  );
+  return [
+    "my-cc-lite /verify 入口状态:",
+    `- objective: ${task.objective}`,
+    `- verification.status: ${task.verification.status}`,
+    "- tasks:",
+    ...taskLines,
   ].join("\n");
 }
 

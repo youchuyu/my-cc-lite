@@ -48,6 +48,16 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "^my-cc-lite:task-materializer$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks/do-agent-chain.mjs\"",
+            "timeout": 10
+          }
+        ]
       }
     ]
   }
