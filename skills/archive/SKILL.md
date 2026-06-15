@@ -93,15 +93,10 @@ node <pluginRoot>/scripts/run.mjs archive archive
 
 ## 错误处理
 
-- `PROJECT_NOT_INITIALIZED`：提示先执行 `/init`。
-- `NO_ACTIVE_TASK`：提示当前没有可归档任务，先执行 `/plan`。
-- `MULTIPLE_ACTIVE_TASKS`：提示当前状态异常，需要手动处理多 active task。
-- `PLAN_NOT_FOUND`：提示当前 task 缺少 `plan.md`，回到 `/plan` 或手动修复。
-- `TASK_STATE_NOT_FOUND`：提示先执行 `/do` 生成 `task.json`。
-- `ARCHIVE_TARGET_EXISTS`：提示检查已有归档目录，脚本不会覆盖或合并。
+入口状态异常在 skill 执行前已被拦截。以下为运行期可能出现的错误：
+
 - `INVALID_INPUT`：修正传给 archive 脚本的 JSON 输入。
-- `INVALID_PROJECT_STATE`：当前 `project.json` 结构异常，需要手动检查状态文件。
-- `INVALID_TASK_STATE`：当前 `task.json` 结构异常或已归档，需要手动检查状态文件。
+- `INVALID_PROJECT_STATE`：脚本写入时的二次校验失败，需要手动检查 `project.json`。
 
 ## 完成反馈
 

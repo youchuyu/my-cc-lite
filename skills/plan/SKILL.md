@@ -66,11 +66,7 @@ disable-model-invocation: true
 
 `/plan` skill 不维护状态判断逻辑。能否创建新计划、项目是否已初始化、是否已有未归档任务，以 plan 阶段脚本的返回为准。
 
-如果脚本返回错误，按错误码给出简短处理建议：
-
-- `PROJECT_NOT_INITIALIZED`：提示先执行 `/init`。
-- `ACTIVE_TASK_EXISTS`：提示当前已有未归档任务，先处理当前任务后再创建新计划。
-- 其他错误：引用脚本返回的 `error.message`，不要自行推断或修复状态文件。
+入口状态异常在 skill 执行前已被拦截。如果脚本仍返回错误，直接引用 `error.message` 提示用户，不要自行推断或修复状态文件。
 
 ## planning helpers
 

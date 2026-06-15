@@ -194,11 +194,11 @@ node <pluginRoot>/scripts/run.mjs do inspect
 
 ## 错误处理
 
-- 显式 `/do` 的基础入口错误通常由 preflight hook 提前阻断；如果 `inspect` 仍返回这类错误，以脚本返回为准，简短提示下一步，不自行扫描或修复状态。
+入口状态异常在 skill 执行前已被拦截。以下为运行期可能出现的错误：
+
 - `TASK_ALREADY_MATERIALIZED`：读取现有 `task.json` 并进入恢复状态检查。
 - `TASK_STATE_NOT_FOUND`：只能在 `update-task` 时出现，先执行 materialize。
 - `TASK_NOT_FOUND`：不要隐式新增 task，提示回到 `/plan` 调整。
-- `INVALID_TASK_STATE`：当前 `task.json` 结构异常，或运行期状态与预期不一致，需要手动检查状态文件。
 
 ## 完成反馈
 

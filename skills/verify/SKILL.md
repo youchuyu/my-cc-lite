@@ -65,6 +65,7 @@ disable-model-invocation: true
 
 - 用于验证未通过，且无法形成明确 repair task，或缺少用户决策、权限、外部条件、计划调整、可靠判断条件。
 - 调用脚本写入 `status: "blocked"`、`stage: "verifying"`、`verification.status: "blocked"`。
+- `summary` 必须说明两件事：**阻塞原因**（具体缺少什么条件或决策）和**恢复条件**（满足什么条件后可以继续）。只写"无法验证"或"缺少条件"不够，必须具体到用户可以采取行动的粒度。
 - 下一步建议 `/plan`、用户决策或处理外部阻塞。
 
 ## Repair Task
@@ -147,14 +148,9 @@ node <pluginRoot>/scripts/run.mjs verify complete
 
 ## 错误处理
 
-- `PROJECT_NOT_INITIALIZED`：提示先执行 `/init`。
-- `NO_ACTIVE_TASK`：提示先执行 `/plan`。
-- `MULTIPLE_ACTIVE_TASKS`：提示当前状态异常，需要手动处理多 active task。
-- `PLAN_NOT_FOUND`：提示当前 task 缺少 `plan.md`，回到 `/plan` 或手动修复。
-- `TASK_STATE_NOT_FOUND`：提示先执行 `/do` 生成 `task.json`。
-- `TASK_NOT_VERIFIABLE`：提示回到 `/do` 继续执行、修复或处理阻塞。
+入口状态异常在 skill 执行前已被拦截。以下为运行期可能出现的错误：
+
 - `INVALID_INPUT`：修正传给 verify 脚本的 JSON 输入。
-- `INVALID_TASK_STATE`：当前 `task.json` 结构异常，需要手动检查状态文件。
 
 ## 完成反馈
 
