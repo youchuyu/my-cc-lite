@@ -127,22 +127,22 @@ agent `verifier` 的 `task_review` 输入应包含：
 
 ### 跳转
 
-- 如果 agent `verifier` 的 `result` 是 **passed**，进入“写入结果并继续或停止”，写入 **completed**。
+- 如果 agent `verifier` 的 `result` 是 **passed**，进入“写入结果并继续”，写入 **completed**。
 - 如果 agent `verifier` 的 `result` 是 **needs_fix**，不写入 **completed**，当前 task 保持 **in_progress**，选择合适的 agent 处理 agent `verifier` 返回的问题：问题可由 agent `executor` 收敛，回到“准备执行交接”；如果是明确构建、类型、测试或运行时报错，可委派 agent `debugger`。
 - 如果 agent `verifier` 的 `result` 是 **blocked**，停止；阻塞原因明确且当前 task 无法继续时，进入“写入结果并继续或停止”，写入 **blocked**。
 - 如果检查结果缺少必要摘要、证据或状态不明确，停止并请求 agent `verifier` 或用户补充，不猜测写入状态。
 
-## 7. 写入结果并继续或停止
+## 7. 写入结果并继续
 
 ### 工作内容
 
-由 `/do` 调用 `scripts/run.mjs do update-task` 写入当前 task 的执行状态，并决定继续循环还是停止。
+由 `/do` 调用 `scripts/run.mjs do update-task` 写入当前 task 的执行状态，并决定继续循环。
 
 agent `executor`、agent `verifier` 和 agent `debugger` 不调用阶段脚本，不读写 `task.json`，不自行标记状态。
 
 ### 规则
 
-- 写入 **completed** 后，回到“进入与读取状态”，继续选择下一个可执行 task。
+- 写入 **completed** 后，回到“进入与读取状态”，继续选择下一个可执行 task，没有可执行 task 时停止。
 - 写入 **blocked** 后，停止。
 - 写入 **failed** 后，停止。
 - 写入 **skipped** 只在用户明确确认跳过时发生，写入后回到“进入与读取状态”。
