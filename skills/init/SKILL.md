@@ -6,19 +6,15 @@ disable-model-invocation: true
 
 # Init
 
-`/init` 是 my-cc-lite 的项目级初始化入口。它只负责刷新目标项目中的 `.my-cc-lite/project.json`，不创建任务、不写计划、不推进执行或验证阶段。
-
-## 使用条件
-
-当用户手动调用 `/init`，或明确要求初始化、刷新 my-cc-lite 项目状态时使用。
+`/init` 是 my-cc-lite 的项目级初始化入口。它只负责收集项目基本信息，并识别各阶段可用的外部 helper（skill、agent、tool 等上下文可见的可调用能力），写入 `.my-cc-lite/project.json`。
 
 ## 执行步骤
 
 1. 确认当前工作目录就是目标项目根目录。
 2. 读取少量项目线索，例如 `README`、package manifest、顶层目录或已有设计文档。
 3. 写出一到两句 `projectSummary`，只描述项目基本形态和后续阶段需要知道的轻量背景。
-4. 审查当前上下文可见的外部 companion helper。
-5. 排除 Claude Code 宿主基础能力、Claude Code 原生协作模式和 my-cc-lite 自身能力。
+4. 审查当前上下文可见的 helper 候选。
+5. 按「必须排除」过滤，剩余的才是候选 helper。
 6. 构造 `stageHelpers.planning`、`stageHelpers.execution` 和 `stageHelpers.review`。
 7. 调用 my-cc-lite runtime entry 的 `init init-project`，通过 stdin 传入 JSON。
 8. 汇总 `.my-cc-lite/project.json` 路径、项目摘要和各阶段 helper 数量。
@@ -64,8 +60,6 @@ node <pluginRoot>/scripts/run.mjs init init-project
 
 - 当前上下文明确定义或可见。
 - 以 skill、agent 或 tool 形式存在。
-- 属于外部 companion helper，不是 Claude Code 宿主基础能力。
-- 不属于 my-cc-lite 自身能力。
 - 对目标阶段有直接帮助。
 
 阶段路由：
@@ -108,7 +102,6 @@ node <pluginRoot>/scripts/run.mjs init init-project
 - 不记录事件日志。
 - 不记录完整能力清单。
 - 不扫描 Claude Code transcript。
-- 不管理 Claude Code `Plan` / `Explore` 等协作模式。
 
 ## 调用示例
 

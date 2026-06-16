@@ -108,9 +108,7 @@ function buildPlanningHelpersPrompt(planningHelpers) {
 
   return [
     "- planning helpers:",
-    ...planningHelpers.map(
-      (helper) => `${helper.name}: ${helper.description}；`,
-    ),
+    ...planningHelpers.map((helper) => `${helper.name}`),
     "这些 planning helpers 可作为 /plan 阶段的参考能力。",
   ].join("\n");
 }
@@ -122,10 +120,8 @@ function buildExecutionSkillsPrompt(executionSkills) {
 
   return [
     "- execution skills:",
-    ...executionSkills.map(
-      (helper) => `  ${helper.name}: ${helper.description}；`,
-    ),
-    "如果某个 execution skill 明确适合某个任务，可以在该任务描述里声明后续使用；不要在 /plan 阶段调用这些 skills。",
+    ...executionSkills.map((helper) => `  ${helper.name}`),
+    "如果某个 execution skill 能直接承担或配合完成某个工作项，应在该工作项的 Do 中注明使用该 skill；不要在 /plan 阶段调用这些 skills。",
   ].join("\n");
 }
 
@@ -144,7 +140,8 @@ async function buildDoContext(_project, projectRoot) {
     return "my-cc-lite /do 入口状态:\n- task.exists: false";
   }
   const taskLines = task.tasks.map(
-    (t) => `  - ${t.id} [${t.status}]: "${t.title}"${t.statusReason ? ` (${t.statusReason})` : ""}`
+    (t) =>
+      `  - ${t.id} [${t.status}]: "${t.title}"${t.statusReason ? ` (${t.statusReason})` : ""}`,
   );
   return [
     "my-cc-lite /do 入口状态:",
@@ -165,7 +162,7 @@ async function buildVerifyContext(_project, projectRoot) {
   const task = await readTask(taskDir).catch(() => null);
   if (!task) return "";
   const taskLines = task.tasks.map(
-    (t) => `  - ${t.id} [${t.status}]: "${t.title}"`
+    (t) => `  - ${t.id} [${t.status}]: "${t.title}"`,
   );
   return [
     "my-cc-lite /verify 入口状态:",
