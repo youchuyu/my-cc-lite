@@ -35,9 +35,9 @@ level: 3
 - 将 `Goal`、`Do`、`Check` 优先作为拆解依据；如果计划结构不同，根据语义提取等价信息。
 - 让每个 task 围绕一个可独立推进的目标组织，`title` 表达任务边界，`steps[]` 表达主要动作，`checks[]` 表达完成判断。
 - 没有明确 `Check` 时，根据目标、动作和相关上下文生成最小可判断检查项。
+- 完整转换 plan 中的 objective 和每个 task 的 title，不做语义压缩或概括。
 - 使用 `T1`、`T2`、`T3` 这类稳定递增 task id。
 - 如果 `plan.md` 缺少明确 `Objective`，返回 `needs_plan_update`，不要生成可写入结果。
-- 尽可能完整的转换plan中的内容，不要压缩，有用信息都要补充进task中。
 </Responsibilities>
 
 <Result_Semantics>

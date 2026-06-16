@@ -14,7 +14,7 @@ disable-model-invocation: true
 
 当用户手动调用 `/do`，或明确要求继续执行当前 my-cc-lite 任务时使用。
 
-当前工作目录应是目标项目根目录。显式 `/do` 的基础入口硬门禁由 preflight hook 提前阻断；进入 `/do` 后仍必须从 `scripts/run.mjs do inspect` 获取状态快照，并以脚本返回为准。
+当前工作目录应是目标项目根目录。显式 `/do` 的基础入口硬门禁由 preflight hook 提前阻断。
 
 ## 流程总览
 
@@ -42,7 +42,7 @@ disable-model-invocation: true
   - 只剩 `blocked` 或 `failed`：停止并请求用户确认恢复、重试、跳过或回到 `/plan`。
   - 存在 `in_progress` 或 `pending`：进入**恢复状态检查**，选择当前 task 并判断本轮是否继续执行。
 
-**入口检查**只基于 `inspect` 结果做静态状态路由，不物化 `task.json`，不选择接管方式，不调度 agent，不读取业务代码。
+**入口检查**只基于 `inspect` 结果做静态状态路由，不物化 `task.json`，不选择接管方式，不调度 agent。
 
 已有 `task.json` 的恢复流程只根据 `inspect.result.task.tasks[]` 选择当前 task；不重新解释完整 `plan.md`，不重新物化，不选择外部接管方式，不读取业务代码。
 
@@ -63,7 +63,6 @@ inspect.result.task.exists === true
 - 如果用户只是要求“恢复任务”、“查看进度”、“看当前状态”或类似状态检查，只输出恢复结果并停止，不写入状态，不调度 executor。
 - 如果用户明确要求“继续执行”、“继续推进”、“执行当前 task”或手动调用 `/do` 且没有查看状态/只恢复的限定，进入 **my-cc-lite 原生状态接管**。
 
-恢复状态检查不读取业务代码、不补全文件清单、不运行检查命令、不调用 agent。
 
 ## 首次物化流程
 
@@ -170,15 +169,6 @@ node <pluginRoot>/scripts/run.mjs do inspect
 ```
 
 `blocked`、`failed` 和 `skipped` 必须写一句简短 `statusReason`。`pending`、`in_progress` 和 `completed` 可以清空 `statusReason`。
-
-## 连续推进和停止条件
-
-连续执行和停止条件按当前接管方式处理：
-
-- my-cc-lite 原生状态接管按 `reference/native-control.md` 的状态路由、执行交接和结果写入规则推进。
-- 外部高阶接管按 `reference/external-control.md` 推进完整 `tasks[]`，并通过受限 `update-task` 接口落盘状态。
-
-遇到无法可靠继续、需要用户决策、需要修改任务结构或已经完成全部 task 时，必须停止并说明原因。
 
 ## 能力约束
 
