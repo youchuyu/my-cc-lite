@@ -6,14 +6,14 @@ disable-model-invocation: true
 
 # Init
 
-`/init` 是 my-cc-lite 的项目级初始化入口。它只负责收集项目基本信息，并识别各阶段可用的外部 helper（skill、agent、tool 等上下文可见的可调用能力），写入 `.my-cc-lite/project.json`。
+`/init` 是 my-cc-lite 的项目级初始化入口。它只负责分析传给模型的上下文信息，收集项目基本信息，并识别各阶段（参考**阶段路由**）可用的外部 helper（skills 等上下文可见的可调用能力），然后写入 `.my-cc-lite/project.json`。
 
 ## 执行步骤
 
 1. 确认当前工作目录就是目标项目根目录。
-2. 读取少量项目线索，例如 `README`、package manifest、顶层目录或已有设计文档。
-3. 写出一到两句 `projectSummary`，只描述项目基本形态和后续阶段需要知道的轻量背景。
-4. 审查当前上下文可见的 helper 候选，按 helper 纳入规则过滤，构造 `stageHelpers.planning`、`stageHelpers.execution` 和 `stageHelpers.review`。
+2. 审查当前模型上下文可见的用于各个阶段的 helper 候选，按类型构造 `stageHelpers.planning`、`stageHelpers.execution` 和 `stageHelpers.review`。
+3. 读取少量顶层目录下的项目线索，例如 `README`、package manifest、已有设计文档。
+4. 写出一到两句 `projectSummary`，只描述项目基本形态和后续阶段需要知道的轻量背景。
 5. 调用 my-cc-lite runtime entry 的 `init init-project`，通过 stdin 传入 JSON（见下方调用示例）。
 6. 汇报 `.my-cc-lite/project.json` 路径、项目摘要和各阶段 helper 数量，提示可以进入 `/plan`。
 
@@ -31,7 +31,7 @@ disable-model-invocation: true
 - Claude Code 宿主基础能力：`Bash`、`Read`、`Write`、`Edit`、`WebSearch`、`WebFetch`、`TodoWrite`、`Task`。
 - Claude Code 原生协作模式：`Plan`、`Explore`。
 - Claude Code 原生通用 agent：`general-purpose`。
-- my-cc-lite 自身能力：`init`、`plan`、`do`、`verify`、`status`、`archive`、`planner`、`executor`、`verifier`。
+- my-cc-lite 自身能力：`my-cc-lite:*`。
 - 配置、后台循环、权限管理、HUD、status-line、transcript 清理和 setup 类能力。
 
 **阶段路由：**
@@ -40,18 +40,13 @@ disable-model-invocation: true
 - `execution`：供 `/do` 使用，例如领域专项执行 helper 或可委派实现 agent。
 - `review`：供 `/verify` 使用，例如 code review、security review、bug finding 或验证诊断。
 
-每个 helper 使用扁平结构：
+每个 helper 是一个包含四个字段的对象：`name`、`type`、`invoke`、`description`。
 
-```json
-{
-  "name": "codegraph_context",
-  "type": "tool",
-  "invoke": "mcp__codegraph.codegraph_context",
-  "description": "Collect code context before /plan drafts implementation tasks"
-}
-```
+- `type` 为 `"skill"` 时，`invoke` 填 system-reminder skill 列表中的名称，原样照抄。
+- `type` 为 `"tool"` 时，`invoke` 填系统提示中定义的 MCP tool 函数名，原样照抄。
+- `description` 描述该 helper 在此阶段如何帮助 my-cc-lite，不描述泛化能力。
 
-`description` 描述 helper 在对应阶段怎样帮助 my-cc-lite，不描述泛化能力。没有明确外部 helper 时，三个数组全部为空。
+没有明确外部 helper 时，三个数组全部为空。
 
 ## 调用示例
 
