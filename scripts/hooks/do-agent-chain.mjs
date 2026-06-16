@@ -190,4 +190,8 @@ function appendContext(eventName, message) {
   };
 }
 
-process.stdout.write(`${JSON.stringify(await main(), null, 2)}\n`);
+try {
+  process.stdout.write(`${JSON.stringify(await main(), null, 2)}\n`);
+} catch {
+  process.stdout.write(`${JSON.stringify(silentContinue(), null, 2)}\n`);
+}

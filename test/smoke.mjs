@@ -437,7 +437,7 @@ try {
   assertHookContext(secondPlanContextHook, "UserPromptExpansion", /projectSummary: Second summary\./);
   assert.match(secondPlanContextHook.hookSpecificOutput.additionalContext, /planning helpers:/);
   assert.match(secondPlanContextHook.hookSpecificOutput.additionalContext, /codegraph_context: Collect code context before \/plan drafts implementation tasks/);
-  assert.match(secondPlanContextHook.hookSpecificOutput.additionalContext, /optional execution skills for later \/do:/);
+  assert.match(secondPlanContextHook.hookSpecificOutput.additionalContext, /execution skills:/);
   assert.match(secondPlanContextHook.hookSpecificOutput.additionalContext, /implementation-skill: Help implement project-specific changes during \/do/);
 
   const beforeMalformed = await readFile(path.join(targetDir, ".my-cc-lite", "project.json"), "utf8");
@@ -502,7 +502,7 @@ try {
   assert.doesNotMatch(planContextHook.hookSpecificOutput.additionalContext, /workspace-runner/);
 
   const doContextHook = runStageContextHook(userPromptExpansion("my-cc-lite:do"));
-  assertSilentPreflight(doContextHook);
+  assertHookContext(doContextHook, "UserPromptExpansion", /task\.exists: false/);
 
   assert.equal(existsSync(path.join(targetDir, ".my-cc-lite", "tasks")), false);
 
