@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { readFileSync } from "node:fs";
-import { writeHookLog } from "../lib/hook-log.mjs";
+import { resolveHookLogDir, writeHookLog } from "../lib/hook-log.mjs";
 import { validateProject } from "../lib/schema.mjs";
 import { getCurrentTaskDir, readProject, readTask } from "../lib/state.mjs";
 
@@ -20,6 +20,8 @@ async function main() {
   const expansionType = input.expansion_type || input.expansionType;
   const commandName = input.command_name || input.commandName;
   const stage = normalizeStage(commandName);
+  const projectRoot = input.cwd || process.cwd();
+  const taskDir = await resolveHookLogDir(projectRoot);
   writeHookLog({
     hook: "stage-context",
     event: eventName,
@@ -31,6 +33,7 @@ async function main() {
       cwd: input.cwd,
     },
     rawContent,
+    logDir: taskDir,
   });
 
   if (
@@ -41,7 +44,6 @@ async function main() {
     return silentContinue();
   }
 
-  const projectRoot = input.cwd || process.cwd();
   const project = await readValidProject(projectRoot);
   if (!project) {
     return silentContinue();
@@ -66,6 +68,7 @@ async function main() {
       context,
     },
     rawContent,
+    logDir: taskDir,
   });
   return appendContext("UserPromptExpansion", context);
 }

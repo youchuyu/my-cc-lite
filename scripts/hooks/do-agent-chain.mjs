@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 
 import { readFileSync } from "node:fs";
-import { writeHookLog } from "../lib/hook-log.mjs";
+import { resolveHookLogDir, writeHookLog } from "../lib/hook-log.mjs";
 
-function main() {
+async function main() {
   const { input, rawContent } = readHookStdinJson();
   const eventName = input.hook_event_name || input.hookEventName;
   const agentType = normalizeAgentType(input.agent_type || input.agentType);
-  writeHookLog({ hook: "do-agent-chain", event: eventName, fields: { agent: agentType }, rawContent });
+  const taskDir = await resolveHookLogDir(input.cwd);
+  writeHookLog({ hook: "do-agent-chain", event: eventName, fields: { agent: agentType }, rawContent, logDir: taskDir });
 
   if (eventName !== "SubagentStop") {
     return silentContinue();
@@ -189,4 +190,4 @@ function appendContext(eventName, message) {
   };
 }
 
-process.stdout.write(`${JSON.stringify(main(), null, 2)}\n`);
+process.stdout.write(`${JSON.stringify(await main(), null, 2)}\n`);

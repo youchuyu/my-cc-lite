@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { readFileSync } from "node:fs";
-import { writeHookLog } from "../lib/hook-log.mjs";
+import { resolveHookLogDir, writeHookLog } from "../lib/hook-log.mjs";
 import { readPreflightState } from "../lib/preflight.mjs";
 
 const STAGES = new Set(["init", "plan", "do", "verify", "archive"]);
@@ -12,19 +12,21 @@ async function main() {
   const expansionType = input.expansion_type || input.expansionType;
   const commandName = input.command_name || input.commandName;
   const stage = normalizeStage(commandName);
+  const projectRoot = input.cwd || process.cwd();
+  const taskDir = await resolveHookLogDir(projectRoot);
   writeHookLog({
     hook: "stage-preflight",
     event: eventName,
     label: "enter",
     fields: { expansion: expansionType, command: commandName, stage, cwd: input.cwd },
-    rawContent
+    rawContent,
+    logDir: taskDir,
   });
 
   if (eventName !== "UserPromptExpansion" || expansionType !== "slash_command" || !stage) {
     return silentContinue();
   }
 
-  const projectRoot = input.cwd || process.cwd();
   const state = await readPreflightState(projectRoot);
   const result = buildPreflightResult(stage, state);
   const message = result.message;
@@ -33,7 +35,8 @@ async function main() {
     event: eventName,
     label: "result",
     fields: { expansion: expansionType, command: commandName, stage, cwd: projectRoot, message },
-    rawContent
+    rawContent,
+    logDir: taskDir,
   });
   if (!result.block) {
     return silentContinue();
