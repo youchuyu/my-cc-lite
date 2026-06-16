@@ -13,56 +13,28 @@ disable-model-invocation: true
 1. 确认当前工作目录就是目标项目根目录。
 2. 读取少量项目线索，例如 `README`、package manifest、顶层目录或已有设计文档。
 3. 写出一到两句 `projectSummary`，只描述项目基本形态和后续阶段需要知道的轻量背景。
-4. 审查当前上下文可见的 helper 候选。
-5. 按「必须排除」过滤，剩余的才是候选 helper。
-6. 构造 `stageHelpers.planning`、`stageHelpers.execution` 和 `stageHelpers.review`。
-7. 调用 my-cc-lite runtime entry 的 `init init-project`，通过 stdin 传入 JSON。
-8. 汇总 `.my-cc-lite/project.json` 路径、项目摘要和各阶段 helper 数量。
-9. 提示下一步可以进入 `/plan`。
-
-## 输入格式
-
-脚本调用统一使用 my-cc-lite runtime entry：
-
-- 如果当前工作目录存在 `scripts/run.mjs`，使用：
-
-```bash
-node scripts/run.mjs init init-project
-```
-
-- 否则先定位 my-cc-lite 插件根目录，使用：
-
-```bash
-node <pluginRoot>/scripts/run.mjs init init-project
-```
-
-- 调用命令时不得切换到插件根目录；当前工作目录必须保持为目标项目根目录。
-- 如果无法定位插件根目录，停止并提示用户提供插件根目录；不要尝试调用 `/scripts/run.mjs`。
-
-调用脚本时传入：
-
-```json
-{
-  "projectSummary": "A short project summary.",
-  "stageHelpers": {
-    "planning": [],
-    "execution": [],
-    "review": []
-  }
-}
-```
-
-没有明确外部 companion helper 时，三个数组可以全部为空。
+4. 审查当前上下文可见的 helper 候选，按 helper 纳入规则过滤，构造 `stageHelpers.planning`、`stageHelpers.execution` 和 `stageHelpers.review`。
+5. 调用 my-cc-lite runtime entry 的 `init init-project`，通过 stdin 传入 JSON（见下方调用示例）。
+6. 汇报 `.my-cc-lite/project.json` 路径、项目摘要和各阶段 helper 数量，提示可以进入 `/plan`。
 
 ## helper 纳入规则
 
-只纳入同时满足以下条件的 helper：
+只纳入同时满足以下全部条件的 helper：
 
 - 当前上下文明确定义或可见。
 - 以 skill、agent 或 tool 形式存在。
 - 对目标阶段有直接帮助。
+- 不属于排除类别（见下）。
 
-阶段路由：
+**排除类别：**
+
+- Claude Code 宿主基础能力：`Bash`、`Read`、`Write`、`Edit`、`WebSearch`、`WebFetch`、`TodoWrite`、`Task`。
+- Claude Code 原生协作模式：`Plan`、`Explore`。
+- Claude Code 原生通用 agent：`general-purpose`。
+- my-cc-lite 自身能力：`init`、`plan`、`do`、`verify`、`status`、`archive`、`planner`、`executor`、`verifier`。
+- 配置、后台循环、权限管理、HUD、status-line、transcript 清理和 setup 类能力。
+
+**阶段路由：**
 
 - `planning`：供 `/plan` 使用，例如代码上下文分析、架构判断、风险识别。
 - `execution`：供 `/do` 使用，例如领域专项执行 helper 或可委派实现 agent。
@@ -79,31 +51,26 @@ node <pluginRoot>/scripts/run.mjs init init-project
 }
 ```
 
-`description` 描述 helper 在对应阶段怎样帮助 my-cc-lite，不描述泛化能力。
-
-## 必须排除
-
-不要写入：
-
-- Claude Code 宿主基础能力，例如 `Bash`、`Read`、`Write`、`Edit`、`WebSearch`、`WebFetch`、`TodoWrite`、`Task`。
-- Claude Code 原生协作模式，例如 `Plan`、`Explore`。
-- Claude Code 原生通用 agent，例如 `general-purpose`。
-- my-cc-lite 自身能力，例如 `init`、`plan`、`do`、`verify`、`status`、`archive`、`planner`、`executor`、`verifier`。
-- 配置、后台循环、权限管理、HUD、status-line、transcript 清理和 setup 类能力。
-
-## 禁止事项
-
-`/init` 不做以下事情：
-
-- 不创建 `.my-cc-lite/tasks/`。
-- 不创建或修改 `plan.md`。
-- 不创建或修改 `task.json`。
-- 不运行项目检查命令。
-- 不记录事件日志。
-- 不记录完整能力清单。
-- 不扫描 Claude Code transcript。
+`description` 描述 helper 在对应阶段怎样帮助 my-cc-lite，不描述泛化能力。没有明确外部 helper 时，三个数组全部为空。
 
 ## 调用示例
+
+脚本调用统一使用 my-cc-lite runtime entry：
+
+- 如果当前工作目录存在 `scripts/run.mjs`，使用：
+
+```bash
+node scripts/run.mjs init init-project
+```
+
+- 否则先定位 my-cc-lite 插件根目录，使用：
+
+```bash
+node <pluginRoot>/scripts/run.mjs init init-project
+```
+
+- 调用命令时不得切换到插件根目录；当前工作目录必须保持为目标项目根目录。
+- 如果无法定位插件根目录，停止并提示用户提供；不要尝试直接调用 `/scripts/run.mjs`。
 
 ```bash
 node scripts/run.mjs init init-project <<'JSON'
@@ -117,3 +84,11 @@ node scripts/run.mjs init init-project <<'JSON'
 }
 JSON
 ```
+
+## 禁止事项
+
+- 不运行项目检查命令。
+- 不记录事件日志。
+- 不记录完整能力清单。
+- 不扫描 Claude Code transcript。
+- 不创建 `.my-cc-lite/tasks/`。
