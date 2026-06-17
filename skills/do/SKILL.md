@@ -111,7 +111,7 @@ task.json 首次物化成功，并且 /do 已重新 inspect 拿到完整 task.js
 
 用于首次物化后选择原生状态接管，或已有 `task.json` 且用户明确继续执行时。按 `reference/native-control.md` 执行，并遵守 `reference/state-boundary.md`。
 
-原生状态接管中，agent `executor` 返回 `completed` 后必须经过 agent `verifier` 的 `task_review` mode；只有 agent `verifier` 返回 `passed`，`/do` 才允许写入 `tasks[].status: "completed"`。
+原生状态接管中，agent `executor` 返回 `completed` 后必须经过 agent `verifier`；只有 agent `verifier` 返回 `passed`，`/do` 才允许写入 `tasks[].status: "completed"`。
 
 ## 外部高阶流程接管
 

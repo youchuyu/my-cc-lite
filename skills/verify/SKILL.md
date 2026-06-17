@@ -27,7 +27,7 @@ disable-model-invocation: true
 
 1. 读取脚本可访问的当前 `plan.md` 和 `task.json` 上下文。
 2. 根据 `plan.md`、`task.json.objective`、`tasks[]` 和 `checks[]` 形成最终验收判断。
-3. 必要时委派 `verifier` 的 `final_verify` mode，或调用 `project.json.stageHelpers.review` 中明确匹配的 review helper。
+3. 必要时调用 `project.json.stageHelpers.review` 中明确匹配的 review helper。
 4. 必要时读取相关项目文件或运行轻量检查命令；这些上下文只服务本轮判断，不落盘。
 5. 在 `passed`、`needs_fix`、`blocked` 中选择一个结论。
 6. 调用 verify 阶段脚本执行 `complete`，通过 stdin 传入 JSON。
@@ -144,7 +144,7 @@ node <pluginRoot>/scripts/run.mjs verify complete
 - 不保存完整 review 报告、命令日志、changed files、事件日志或证据文件。
 - 不自动调用 `/do` 修复。
 - 不自动调用 `/archive` 归档。
-- 不让 `verifier` 或 review helper 直接调用阶段脚本或写入状态。
+- 不让 review helper 直接调用阶段脚本或写入状态。
 
 ## 错误处理
 

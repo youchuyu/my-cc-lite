@@ -111,9 +111,9 @@ agent `executor` 的结果应归一为以下状态之一：
 
 ### 工作内容
 
-委派 agent `verifier` 的 `task_review` mode，判断当前 task 是否满足自己的 `checks[]`。`/do` 只准备检查输入并接收判断结果，不自行补读业务代码、不自行验收当前 task。
+委派 agent `verifier`，判断当前 task 是否满足自己的 `checks[]`。`/do` 只准备检查输入并接收判断结果，不自行补读业务代码、不自行验收当前 task。
 
-agent `verifier` 的 `task_review` 输入应包含：
+agent `verifier` 的输入应包含：
 
 - 当前 task entry：`id`、`title`、`status`、`statusReason`、`steps`、`checks`。
 - agent `executor` 的简短执行摘要、关键文件和检查结果摘要。
