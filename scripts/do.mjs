@@ -7,7 +7,7 @@ import {
   normalizeDoMaterializeInput,
   normalizeDoTaskPatch,
   StateError,
-  summarizeTask
+  summarizeSubtask
 } from "./lib/schema.mjs";
 import { getCurrentTaskDir, readPlan, readProject, readTask, withStateLock, writeTask } from "./lib/state.mjs";
 
@@ -51,7 +51,7 @@ async function inspect() {
           updatedAt: task.updatedAt,
           verification: task.verification,
           archive: task.archive,
-          tasks: task.tasks.map(summarizeTaskForInspect)
+          subtasks: task.subtasks.map(summarizeSubtaskForInspect)
         }
       : {
           exists: false,
@@ -82,7 +82,7 @@ async function materialize() {
         stage: "executing",
         createdAt: now,
         updatedAt: now,
-        tasks: input.tasks,
+        subtasks: input.subtasks,
         verification: {
           status: "not_started",
           summary: ""
@@ -98,7 +98,7 @@ async function materialize() {
         taskDir,
         taskPath,
         planPath,
-        tasks: task.tasks.map(summarizeTask)
+        subtasks: task.subtasks.map(summarizeSubtask)
       };
     },
     { operation: "do-materialize" }
@@ -118,13 +118,13 @@ async function updateTask() {
       if (!task) {
         throw new StateError("TASK_STATE_NOT_FOUND", "Current task is missing task.json.");
       }
-      const entry = task.tasks.find((candidate) => candidate.id === input.id);
+      const entry = task.subtasks.find((candidate) => candidate.id === input.id);
       if (!entry) {
-        throw new StateError("TASK_NOT_FOUND", `Task not found: ${input.id}.`);
+        throw new StateError("TASK_NOT_FOUND", `Subtask not found: ${input.id}.`);
       }
       entry.status = input.status;
       entry.statusReason = input.statusReason;
-      task.status = summarizeTopLevelStatus(task.tasks);
+      task.status = summarizeTopLevelStatus(task.subtasks);
       task.stage = "executing";
       task.updatedAt = nowIso();
       const taskPath = await writeTask(taskDir, task);
@@ -134,8 +134,8 @@ async function updateTask() {
         taskPath,
         status: task.status,
         stage: task.stage,
-        task: summarizeTask(entry),
-        tasks: task.tasks.map(summarizeTask)
+        task: summarizeSubtask(entry),
+        subtasks: task.subtasks.map(summarizeSubtask)
       };
     },
     { operation: "do-update-task" }
@@ -150,21 +150,21 @@ async function requireCurrentTaskDir(projectRoot) {
   return taskDir;
 }
 
-function summarizeTopLevelStatus(tasks) {
-  if (tasks.some((task) => task.status === "pending" || task.status === "in_progress")) {
+function summarizeTopLevelStatus(subtasks) {
+  if (subtasks.some((subtask) => subtask.status === "pending" || subtask.status === "in_progress")) {
     return "active";
   }
-  if (tasks.every((task) => task.status === "completed" || task.status === "skipped")) {
+  if (subtasks.every((subtask) => subtask.status === "completed" || subtask.status === "skipped")) {
     return "active";
   }
   return "blocked";
 }
 
-function summarizeTaskForInspect(task) {
+function summarizeSubtaskForInspect(subtask) {
   return {
-    ...summarizeTask(task),
-    steps: task.steps,
-    checks: task.checks
+    ...summarizeSubtask(subtask),
+    steps: subtask.steps,
+    checks: subtask.checks
   };
 }
 

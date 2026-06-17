@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Do
 
-`/do` 是 my-cc-lite 的执行状态编排阶段。它把当前 active task 的 `plan.md` 物化为 `task.json`，然后推进其中可执行的 `tasks[]` entry 的状态。
+`/do` 是 my-cc-lite 的执行状态编排阶段。它把当前 active task 的 `plan.md` 物化为 `task.json`，然后推进其中可执行的 `subtasks[]` entry 的状态。
 
 `/do` 只维护 task 级执行状态和执行交接，不维护 step/check 级状态，不做业务代码读取、业务实现、最终验收或归档。
 
@@ -20,13 +20,13 @@ disable-model-invocation: true
 
 `/do` 每次从 `inspect` 开始，读取当前 active task 的状态快照。`/do` 先根据当前任务是否已经存在 `task.json` 分流：
 
-- 如果 `task.json` 不存在，进入**首次物化流程**。首次物化成功后，`/do` 基于完整 `task.json.tasks[]` 选择后续完整执行流程的**接管方式**。
+- 如果 `task.json` 不存在，进入**首次物化流程**。首次物化成功后，`/do` 基于完整 `task.json.subtasks[]` 选择后续完整执行流程的**接管方式**。
 - 如果 `task.json` 已存在，`/do` 不重新选择接管方式，先进入**恢复状态检查**；只有本轮用户明确要求继续执行时，才进入 **my-cc-lite 原生状态接管**。
 
-**接管方式**面向完整 `task.json`，决定后续整个 `tasks[]` 如何被编排和交接：
+**接管方式**面向完整 `task.json`，决定后续整个 `subtasks[]` 如何被编排和交接：
 
 - **my-cc-lite 原生状态接管**：`/do` skill 使用内置 task loop 选择当前 task、确认执行意图、准备执行交接、接收执行结果，并调用 `update-task` 写入执行状态。
-- **外部高阶接管**：外部流程接管完整 `tasks[]` 的执行编排，并通过受限的 `update-task` 接口返回状态写入请求。
+- **外部高阶接管**：外部流程接管完整 `subtasks[]` 的执行编排，并通过受限的 `update-task` 接口返回状态写入请求。
 
 无论采用哪种接管方式，都只能推进执行状态，不能修改任务结构。
 
@@ -37,14 +37,14 @@ disable-model-invocation: true
 3. 如果 `inspect` 成功，只基于当前状态快照做静态路由：
 
 - `inspect.result.task.exists === false`：进入**首次物化流程**。
-- `inspect.result.task.exists === true`：根据 `inspect.result.task.tasks[]` 继续路由：
+- `inspect.result.task.exists === true`：根据 `inspect.result.task.subtasks[]` 继续路由：
   - 所有 task 都是 `completed` 或 `skipped`：停止并提示进入 `/verify`。
   - 只剩 `blocked` 或 `failed`：停止并请求用户确认恢复、重试、跳过或回到 `/plan`。
   - 存在 `in_progress` 或 `pending`：进入**恢复状态检查**，选择当前 task 并判断本轮是否继续执行。
 
 **入口检查**只基于 `inspect` 结果做静态状态路由，不物化 `task.json`，不选择接管方式，不调度 agent。
 
-已有 `task.json` 的恢复流程只根据 `inspect.result.task.tasks[]` 选择当前 task；不重新解释完整 `plan.md`，不重新物化，不选择外部接管方式，不读取业务代码。
+已有 `task.json` 的恢复流程只根据 `inspect.result.task.subtasks[]` 选择当前 task；不重新解释完整 `plan.md`，不重新物化，不选择外部接管方式，不读取业务代码。
 
 ## 恢复状态检查
 
@@ -56,7 +56,7 @@ inspect.result.task.exists === true
 
 流程：
 
-1. 基于 `inspect.result.task.tasks[]` 选择当前 task：优先选择 `in_progress`，否则选择第一个 `pending`。
+1. 基于 `inspect.result.task.subtasks[]` 选择当前 task：优先选择 `in_progress`，否则选择第一个 `pending`。
 2. 向用户说明当前 task 的 `id`、`title`、`status`、必要 `statusReason` 和建议动作。
 3. 判断本轮用户意图：
 
@@ -77,7 +77,7 @@ inspect.result.task.exists === false
 1. 调用 agent `task-materializer`，提供完整 `plan.md`、当前 task 目录路径和首次物化约束。
 2. 根据 agent `task-materializer` 返回的 `result` 字段判断物化结果：
 
-- 如果 `result` 是 `ready`，提取 `objective` 和 `tasks[]` 调用 `scripts/run.mjs do materialize`，成功后重新 `inspect`。
+- 如果 `result` 是 `ready`，提取 `objective` 和 `subtasks[]` 调用 `scripts/run.mjs do materialize`，成功后重新 `inspect`。
 - 如果 `result` 是 `coarse_ready`，先展示 `reason` 和候选拆解并请求用户确认；确认后才允许物化。
 - 如果 `result` 是 `needs_plan_update` 或 `blocked`，不创建 `task.json`，说明原因并停止。
 
@@ -86,7 +86,7 @@ inspect.result.task.exists === false
 职责边界：
 
 - `/do` 只负责把 `plan` 相关内容交给 agent `task-materializer`。
-- `/do` 只负责把 agent `task-materializer` 产出的 `objective` 和 `tasks[]` 写入项目状态。
+- `/do` 只负责把 agent `task-materializer` 产出的 `objective` 和 `subtasks[]` 写入项目状态。
 - `/do` 不重新解释 `plan.md`，不调整任务拆解，也不持久化流程判断字段。
 
 ### 物化后选择接管方式
@@ -94,7 +94,7 @@ inspect.result.task.exists === false
 进入条件：
 
 ```text
-task.json 首次物化成功，并且 /do 已重新 inspect 拿到完整 task.json.tasks[]
+task.json 首次物化成功，并且 /do 已重新 inspect 拿到完整 task.json.subtasks[]
 ```
 
 **接管方式选择**只在首次物化成功后出现。此时 `/do` 将当前 `plan.md` 和完整 `task.json` 交给模型判断，确认当前任务是否有适合的外部高阶能力接管执行。
@@ -111,7 +111,7 @@ task.json 首次物化成功，并且 /do 已重新 inspect 拿到完整 task.js
 
 用于首次物化后选择原生状态接管，或已有 `task.json` 且用户明确继续执行时。按 `reference/native-control.md` 执行，并遵守 `reference/state-boundary.md`。
 
-原生状态接管中，agent `executor` 返回 `completed` 后必须经过 agent `verifier`；只有 agent `verifier` 返回 `passed`，`/do` 才允许写入 `tasks[].status: "completed"`。
+原生状态接管中，agent `executor` 返回 `completed` 后必须经过 agent `verifier`；只有 agent `verifier` 返回 `passed`，`/do` 才允许写入 `subtasks[].status: "completed"`。
 
 ## 外部高阶流程接管
 
@@ -175,8 +175,8 @@ node <pluginRoot>/scripts/run.mjs do inspect
 `/do` 只负责以下能力边界内的事情：
 
 - 读取当前 `/do` 状态快照，并基于 `inspect` 结果做静态路由、恢复判断和执行交接。
-- 在首次物化时，只把 `plan.md` 交给 agent `task-materializer`，并把返回的 `objective` 和 `tasks[]` 通过受限脚本接口写入状态。
-- 在执行阶段，只推进当前 task 的 task 级执行状态；不调整 `tasks[]` 结构，不改写 `plan.md`，也不推进 `/verify`、归档或其他后续阶段状态。
+- 在首次物化时，只把 `plan.md` 交给 agent `task-materializer`，并把返回的 `objective` 和 `subtasks[]` 通过受限脚本接口写入状态。
+- 在执行阶段，只推进当前 task 的 task 级执行状态；不调整 `subtasks[]` 结构，不改写 `plan.md`，也不推进 `/verify`、归档或其他后续阶段状态。
 - 所有状态写入都只能通过 `scripts/run.mjs do materialize` 和 `scripts/run.mjs do update-task` 完成；agent `executor`、agent `verifier`、agent `debugger` 和外部流程都不能直接读写 `task.json`。
 - 询问用户问题时优先使用 AskUserQuestion
 

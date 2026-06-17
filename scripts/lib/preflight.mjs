@@ -112,14 +112,14 @@ async function readTaskSummary(summary) {
     summary.task.status = task.status;
     summary.task.stage = task.stage;
     summary.task.verificationStatus = task.verification.status;
-    summary.task.unfinishedTasks = task.tasks
+    summary.task.unfinishedTasks = task.subtasks
       .filter((entry) => !["completed", "skipped"].includes(entry.status))
       .map((entry) => ({
         id: entry.id,
         status: entry.status
       }));
-    summary.task.completedCount = task.tasks.filter((entry) => entry.status === "completed").length;
-    summary.task.allSkipped = task.tasks.length > 0 && task.tasks.every((entry) => entry.status === "skipped");
+    summary.task.completedCount = task.subtasks.filter((entry) => entry.status === "completed").length;
+    summary.task.allSkipped = task.subtasks.length > 0 && task.subtasks.every((entry) => entry.status === "skipped");
   } catch (error) {
     const normalized = normalizeError(error, "INVALID_TASK_STATE");
     summary.task.exists = true;

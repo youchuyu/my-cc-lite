@@ -7,7 +7,7 @@ import {
   assertVerifiableTask,
   normalizeVerifyCompleteInput,
   StateError,
-  summarizeTask,
+  summarizeSubtask,
   summarizeVerification
 } from "./lib/schema.mjs";
 import { getCurrentTaskDir, readPlan, readProject, readTask, withStateLock, writeTask } from "./lib/state.mjs";
@@ -42,7 +42,7 @@ async function main(argv) {
         status: task.status,
         stage: task.stage,
         verification: summarizeVerification(task),
-        tasks: task.tasks.map(summarizeTask)
+        subtasks: task.subtasks.map(summarizeSubtask)
       };
     },
     { operation: "verify-complete" }
@@ -67,8 +67,8 @@ function applyVerificationResult(task, input) {
       summary: input.summary
     };
   } else if (input.status === "needs_fix") {
-    const repairTasks = buildRepairTasks(task.tasks, input.repairTasks);
-    task.tasks.push(...repairTasks);
+    const repairTasks = buildRepairTasks(task.subtasks, input.repairTasks);
+    task.subtasks.push(...repairTasks);
     task.status = "active";
     task.stage = "executing";
     task.verification = {
@@ -88,8 +88,8 @@ function applyVerificationResult(task, input) {
   task.updatedAt = now;
 }
 
-function buildRepairTasks(existingTasks, repairInputs) {
-  const usedIds = new Set(existingTasks.map((task) => task.id));
+function buildRepairTasks(existingSubtasks, repairInputs) {
+  const usedIds = new Set(existingSubtasks.map((subtask) => subtask.id));
   let nextRepairNumber = nextRepairIndex(usedIds);
   return repairInputs.map((entry) => {
     const id = nextRepairId(usedIds, nextRepairNumber);

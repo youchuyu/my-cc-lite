@@ -86,7 +86,7 @@ node <pluginRoot>/scripts/run.mjs archive archive
 - 不修改 `plan.md`。
 - 不直接手写 `task.json`。
 - 不修改 `.my-cc-lite/project.json`。
-- 不修改已有 `tasks[]`、`steps[]`、`checks[]` 或 `verification`。
+- 不修改已有 `subtasks[]`、`steps[]`、`checks[]` 或 `verification`。
 - 不生成 `archive.md`、完整报告、命令日志、changed files、事件日志或证据文件。
 - 不自动创建新任务。
 - 不设计恢复归档任务。

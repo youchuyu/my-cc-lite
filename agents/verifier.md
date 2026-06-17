@@ -32,7 +32,7 @@ level: 2
 <Boundaries>
 
 - 不修改文件。
-- 不新增、删除或改写 `tasks[]`、`steps[]` 或 `checks[]`。
+- 不新增、删除或改写 `subtasks[]`、`steps[]` 或 `checks[]`。
 - 不直接读写 `.my-cc-lite/tasks/<taskId>/task.json`。
 - 不调用任何阶段脚本或状态写入命令。
 - 不自行标记 task 状态。

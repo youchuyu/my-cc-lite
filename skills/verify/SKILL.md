@@ -26,7 +26,7 @@ disable-model-invocation: true
 ## 执行步骤
 
 1. 读取脚本可访问的当前 `plan.md` 和 `task.json` 上下文。
-2. 根据 `plan.md`、`task.json.objective`、`tasks[]` 和 `checks[]` 形成最终验收判断。
+2. 根据 `plan.md`、`task.json.objective`、`subtasks[]` 和 `checks[]` 形成最终验收判断。
 3. 必要时调用 `project.json.stageHelpers.review` 中明确匹配的 review helper。
 4. 必要时读取相关项目文件或运行轻量检查命令；这些上下文只服务本轮判断，不落盘。
 5. 在 `passed`、`needs_fix`、`blocked` 中选择一个结论。
@@ -38,7 +38,7 @@ disable-model-invocation: true
 
 - `plan.md` 是最终人类语义来源。
 - `task.json.objective` 是执行目标快照。
-- `task.json.tasks[]` 和 `checks[]` 是 `/do` 阶段固化的执行检查结构。
+- `task.json.subtasks[]` 和 `checks[]` 是 `/do` 阶段固化的执行检查结构。
 - 必要项目文件、轻量命令输出摘要、review helper 输出或用户补充说明可以作为本轮判断依据。
 
 如果 `plan.md` 和 `task.json` 轻微表述不同，以 `plan.md` 判断目标和验收口径，以 `task.json` 判断执行结果是否支撑通过。
@@ -47,7 +47,7 @@ disable-model-invocation: true
 
 ## 结论处理
 
-只有 `needs_fix` 会新增 repair task。`blocked` 表示当前无法在原计划范围内形成明确 repair task，因此只写入阻塞结论，不追加 `tasks[]`。
+只有 `needs_fix` 会新增 repair task。`blocked` 表示当前无法在原计划范围内形成明确 repair task，因此只写入阻塞结论，不追加 `subtasks[]`。
 
 `passed`：
 
@@ -58,7 +58,7 @@ disable-model-invocation: true
 `needs_fix`：
 
 - 用于验证未通过，但缺口可以收敛成一个或少量后续 `/do` 可执行 repair tasks。
-- 调用脚本把 repair tasks append 到 `tasks[]` 末尾；同时将当前任务的顶层状态写为 `status: "active"`、`stage: "executing"`，并写入 `verification.status: "needs_fix"` 和 `verification.summary`。
+- 调用脚本把 repair tasks append 到 `subtasks[]` 末尾；同时将当前任务的顶层状态写为 `status: "active"`、`stage: "executing"`，并写入 `verification.status: "needs_fix"` 和 `verification.summary`。
 - 下一步建议 `/do`。
 
 `blocked`：
@@ -72,12 +72,12 @@ disable-model-invocation: true
 
 `needs_fix` 的 repair task 必须满足：
 
-- 来源必须是原 `plan.md` 的目标、范围、验收口径，或已有 `tasks[].checks[]`。
+- 来源必须是原 `plan.md` 的目标、范围、验收口径，或已有 `subtasks[].checks[]`。
 - 不能引入新需求。
 - 不能扩大任务范围。
 - 默认优先 append 一个 repair task。
 - 多个 repair tasks 只用于多个修复入口明确、互相独立、仍属于原计划验收口径的情况。
-- 只能 append 到 `tasks[]` 末尾。
+- 只能 append 到 `subtasks[]` 末尾。
 - 不能删除、重排、合并、拆分或改写已有 task。
 - `steps[]` 和 `checks[]` 保持短，不保存完整 review 报告、命令输出、文件列表或 evidence。
 
@@ -140,7 +140,7 @@ node <pluginRoot>/scripts/run.mjs verify complete
 - 不直接手写 `task.json`。
 - 不修改 `.my-cc-lite/project.json`。
 - 不修改 `plan.md`。
-- 不修改已有 `tasks[]`、`steps[]` 或 `checks[]`。
+- 不修改已有 `subtasks[]`、`steps[]` 或 `checks[]`。
 - 不保存完整 review 报告、命令日志、changed files、事件日志或证据文件。
 - 不自动调用 `/do` 修复。
 - 不自动调用 `/archive` 归档。

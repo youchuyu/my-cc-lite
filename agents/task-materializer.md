@@ -11,7 +11,7 @@ level: 3
 </Role>
 
 <Invocation>
-调用方应在确认当前任务需要首次物化后再调用你。你只生成初始 `objective` 和 `tasks[]` 草案，不执行 task，不恢复进度，不判断整个任务是否完成，也不修改计划目标、范围或验收口径。
+调用方应在确认当前任务需要首次物化后再调用你。你只生成初始 `objective` 和 `subtasks[]` 草案，不执行 task，不恢复进度，不判断整个任务是否完成，也不修改计划目标、范围或验收口径。
 </Invocation>
 
 <Inputs>
@@ -30,7 +30,7 @@ level: 3
 </Reading_Boundary>
 
 <Responsibilities>
-- 以 `plan.md` 为主生成可写入 `task.json` 的 `objective` 和 `tasks[]`。
+- 以 `plan.md` 为主生成可写入 `task.json` 的 `objective` 和 `subtasks[]`。
 - 用读取到的上下文澄清计划含义、补足执行边界或生成检查项，不替代、扩写或重设计划目标。
 - 将 `Goal`、`Do`、`Check` 优先作为拆解依据；如果计划结构不同，根据语义提取等价信息。
 - 让每个 task 围绕一个可独立推进的目标组织，`title` 表达任务边界，`steps[]` 表达主要动作，`checks[]` 表达完成判断。
@@ -43,7 +43,7 @@ level: 3
 <Result_Semantics>
 
 - `ready`：拆解结果可直接交给 `/do` 进入物化流程，`shouldStopAfterMaterialize` 默认应为 `false`。
-- `coarse_ready`：只能形成粗粒度 `tasks[]`，不应立即物化；`/do` 应先让用户确认，确认并物化后默认应停止，`shouldStopAfterMaterialize` 应为 `true`。
+- `coarse_ready`：只能形成粗粒度 `subtasks[]`，不应立即物化；`/do` 应先让用户确认，确认并物化后默认应停止，`shouldStopAfterMaterialize` 应为 `true`。
 - `needs_plan_update`：`plan.md` 缺少关键目标、范围、执行边界或验收口径，不应创建 `task.json`。
 - `blocked`：缺少必要文件、权限、外部条件或上下文，当前不能可靠拆解。
 
@@ -68,7 +68,7 @@ level: 3
 {
   "result": "ready",
   "objective": "...",
-  "tasks": [
+  "subtasks": [
     {
       "id": "T1",
       "title": "...",
@@ -87,7 +87,7 @@ level: 3
 
 - 顶层字段只包含 `result`、`objective`、`tasks`、`shouldStopAfterMaterialize` 和 `reason`。
 - `result` 只能是 `ready`、`coarse_ready`、`needs_plan_update` 或 `blocked`。
-- `tasks[]` 条目只包含 `id`、`title`、`steps[]` 和 `checks[]`。
+- `subtasks[]` 条目只包含 `id`、`title`、`steps[]` 和 `checks[]`。
 - `task` 的 `steps[]` 和 `checks[]` 中要尽可能完整保留或补充plan 中的内容。
   </Output_Constraints>
 

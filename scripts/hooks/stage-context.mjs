@@ -139,14 +139,14 @@ async function buildDoContext(_project, projectRoot) {
   if (!task) {
     return "my-cc-lite /do 入口状态:\n- task.exists: false";
   }
-  const taskLines = task.tasks.map(
+  const taskLines = task.subtasks.map(
     (t) =>
       `  - ${t.id} [${t.status}]: "${t.title}"${t.statusReason ? ` (${t.statusReason})` : ""}`,
   );
   return [
     "my-cc-lite /do 入口状态:",
     `- task.exists: true, status: ${task.status}, stage: ${task.stage}`,
-    "- tasks:",
+    "- subtasks:",
     ...taskLines,
   ].join("\n");
 }
@@ -161,14 +161,14 @@ async function buildVerifyContext(_project, projectRoot) {
   if (!taskDir) return "";
   const task = await readTask(taskDir).catch(() => null);
   if (!task) return "";
-  const taskLines = task.tasks.map(
+  const taskLines = task.subtasks.map(
     (t) => `  - ${t.id} [${t.status}]: "${t.title}"`,
   );
   return [
     "my-cc-lite /verify 入口状态:",
     `- objective: ${task.objective}`,
     `- verification.status: ${task.verification.status}`,
-    "- tasks:",
+    "- subtasks:",
     ...taskLines,
   ].join("\n");
 }

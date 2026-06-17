@@ -31,9 +31,9 @@
 - 任务生命周期不更新 `project.json`。
 - `plan.md` 是计划阶段唯一产物，允许用户在执行前调整。
 - `task.json` 是执行阶段创建的任务级机器状态源。
-- `tasks[]` 面向 executor 子 agent，记录要执行的子任务。
-- `tasks[].steps[]` 记录 executor 子 agent 需要完成的动作清单，允许用轻量树形结构表达复杂动作拆解。
-- `tasks[].checks[]` 记录 review/verifier 子 agent 需要检查的内容。
+- `subtasks[]` 面向 executor 子 agent，记录要执行的子任务。
+- `subtasks[].steps[]` 记录 executor 子 agent 需要完成的动作清单，允许用轻量树形结构表达复杂动作拆解。
+- `subtasks[].checks[]` 记录 review/verifier 子 agent 需要检查的内容。
 - MVP 只允许一个 current task。`.my-cc-lite/tasks/` 下存在未归档任务目录时，新的 `/plan` 必须阻止创建新任务。
 - 不再拆分 `current-task.json`、`capabilities.json`、`workflow.json`、`events.jsonl`、`checks.jsonl`、`evidence.jsonl`、`changed-files.json` 和 `archive.md`。
 
@@ -134,7 +134,7 @@ helper 通过扫描 `.my-cc-lite/tasks/` 下的任务目录定位当前任务：
 
 - 读取 `.my-cc-lite/tasks/<taskId>/plan.md`。
 - 读取并更新 `.my-cc-lite/tasks/<taskId>/task.json`。
-- 当本轮验证写入 `needs_fix`，且可以形成明确最小修复入口时，append 一个或少量 repair tasks 到 `tasks[]` 末尾。
+- 当本轮验证写入 `needs_fix`，且可以形成明确最小修复入口时，append 一个或少量 repair tasks 到 `subtasks[]` 末尾。
 
 `/archive` 只移动当前任务目录：
 
@@ -157,7 +157,7 @@ helper 通过扫描 `.my-cc-lite/tasks/` 下的任务目录定位当前任务：
   "stage": "executing",
   "createdAt": "2026-06-06T15:30:12+08:00",
   "updatedAt": "2026-06-06T15:42:00+08:00",
-  "tasks": [
+  "subtasks": [
     {
       "id": "T1",
       "title": "实现计划中的第一个子任务",
@@ -192,7 +192,7 @@ helper 通过扫描 `.my-cc-lite/tasks/` 下的任务目录定位当前任务：
 }
 ```
 
-`/do` 首次执行时根据当前 `plan.md` 创建 `tasks[]`，并在每个 task 内写入对应的 `steps[]` 和 `checks[]`。`task.json` 创建后，`tasks[]` 作为执行阶段固化结构，不再由 `/do` 自动同步 `plan.md`。唯一例外是 `/verify` 在本轮验证写入 `needs_fix` 时，可以 append 一个或少量 repair tasks 到 `tasks[]` 末尾，作为后续 `/do` 的最小修复入口。`steps[]` 可以用嵌套结构表达动作层级，但不记录 step 级状态。进入执行阶段后，`task.json` 记录执行状态；`/verify` 同时参考最新 `plan.md` 和 `task.json` 判断任务是否完成。
+`/do` 首次执行时根据当前 `plan.md` 创建 `subtasks[]`，并在每个 task 内写入对应的 `steps[]` 和 `checks[]`。`task.json` 创建后，`subtasks[]` 作为执行阶段固化结构，不再由 `/do` 自动同步 `plan.md`。唯一例外是 `/verify` 在本轮验证写入 `needs_fix` 时，可以 append 一个或少量 repair tasks 到 `subtasks[]` 末尾，作为后续 `/do` 的最小修复入口。`steps[]` 可以用嵌套结构表达动作层级，但不记录 step 级状态。进入执行阶段后，`task.json` 记录执行状态；`/verify` 同时参考最新 `plan.md` 和 `task.json` 判断任务是否完成。
 
 `objective` 是 `/do` 首次物化时从当前 `plan.md` 的 `Objective` 部分提取或归纳得到的目标快照，用于状态摘要和快速查看。它不是独立输入源，也不覆盖 `plan.md`。
 
@@ -218,13 +218,13 @@ helper 通过扫描 `.my-cc-lite/tasks/` 下的任务目录定位当前任务：
 ## Notes
 ```
 
-`/plan` 创建任务时只写入 `plan.md`，不创建 `task.json`，也不把可执行子任务同步到 `task.json.tasks[]`。每个 task 的执行动作和检查要求由 `/do` 在执行阶段根据最新 `plan.md` 生成。
+`/plan` 创建任务时只写入 `plan.md`，不创建 `task.json`，也不把可执行子任务同步到 `task.json.subtasks[]`。每个 task 的执行动作和检查要求由 `/do` 在执行阶段根据最新 `plan.md` 生成。
 
-如果用户在 `task.json` 创建前手动调整 `plan.md`，不需要额外 sync。首次 `/do` 读取最新 `plan.md` 并固化执行拆解；`task.json` 创建后，`/do` 不再根据 `plan.md` 自动重写 `tasks[]`。
+如果用户在 `task.json` 创建前手动调整 `plan.md`，不需要额外 sync。首次 `/do` 读取最新 `plan.md` 并固化执行拆解；`task.json` 创建后，`/do` 不再根据 `plan.md` 自动重写 `subtasks[]`。
 
 ## tasks[]
 
-`tasks[]` 维护执行阶段需要交给 executor 子 agent 的子任务。每个 task 自带执行动作清单和检查清单。
+`subtasks[]` 维护执行阶段需要交给 executor 子 agent 的子任务。每个 task 自带执行动作清单和检查清单。
 
 字段：
 
@@ -291,7 +291,7 @@ type Step =
 
 对象 step 只表达动作层级，不维护独立状态。MVP 不在 step 上增加 `id`、`status`、`checks`、`evidence` 或执行日志。
 
-如果某个动作需要独立状态、检查、跳过、失败重试或单独委派，应提升为 `tasks[]` 中的独立 task，而不是放进嵌套 `steps`。
+如果某个动作需要独立状态、检查、跳过、失败重试或单独委派，应提升为 `subtasks[]` 中的独立 task，而不是放进嵌套 `steps`。
 
 示例：
 
@@ -320,15 +320,15 @@ type Step =
 }
 ```
 
-`tasks[]` 不记录 changed files、执行命令或完整日志。执行完成后只回写 task 级 `status` 和可选 `statusReason`。`statusReason` 只保留一句恢复所需的短原因，不在 task 内维护半结构化日志。
+`subtasks[]` 不记录 changed files、执行命令或完整日志。执行完成后只回写 task 级 `status` 和可选 `statusReason`。`statusReason` 只保留一句恢复所需的短原因，不在 task 内维护半结构化日志。
 
-`task.json` 创建后，`tasks[]` 的结构不再由 `/do` 自动修改。`/do` 不新增、删除、重排、合并、拆分 task，也不修改 `tasks[].id`、`tasks[].title`、`tasks[].steps` 或 `tasks[].checks`。若需要改变执行拆解结构，应回到 `/plan` 重新规划当前任务。
+`task.json` 创建后，`subtasks[]` 的结构不再由 `/do` 自动修改。`/do` 不新增、删除、重排、合并、拆分 task，也不修改 `subtasks[].id`、`subtasks[].title`、`subtasks[].steps` 或 `subtasks[].checks`。若需要改变执行拆解结构，应回到 `/plan` 重新规划当前任务。
 
-`/verify` 在写入 `needs_fix` 时可以 append 一个或少量 repair tasks，这是 `tasks[]` 结构固化规则的唯一例外。repair task 必须来自原 `plan.md` 的目标、范围、验收口径，或已有 `tasks[].checks[]` 暴露出的缺口；它不能引入新需求或扩大任务范围。`/verify` 只能 append，不能修改已有 task，不能删除、重排、合并或拆分已有 task。
+`/verify` 在写入 `needs_fix` 时可以 append 一个或少量 repair tasks，这是 `subtasks[]` 结构固化规则的唯一例外。repair task 必须来自原 `plan.md` 的目标、范围、验收口径，或已有 `subtasks[].checks[]` 暴露出的缺口；它不能引入新需求或扩大任务范围。`/verify` 只能 append，不能修改已有 task，不能删除、重排、合并或拆分已有 task。
 
-`tasks[].steps[]` 存储的是执行动作，不是状态机。`/do` 可以按自然顺序递归展开分组 step，但只回写 task 级状态，不回写每条 step 的完成状态。
+`subtasks[].steps[]` 存储的是执行动作，不是状态机。`/do` 可以按自然顺序递归展开分组 step，但只回写 task 级状态，不回写每条 step 的完成状态。
 
-`tasks[].checks[]` 存储的是检查要求，不是 shell 命令记录，也不单独维护每条 check 的状态。`checks[]` MVP 保持字符串数组，不跟随 `steps[]` 树形化。具体检查可以由 review/verifier 子 agent 根据项目上下文决定，任务级验证结论写入 `verification`。
+`subtasks[].checks[]` 存储的是检查要求，不是 shell 命令记录，也不单独维护每条 check 的状态。`checks[]` MVP 保持字符串数组，不跟随 `steps[]` 树形化。具体检查可以由 review/verifier 子 agent 根据项目上下文决定，任务级验证结论写入 `verification`。
 
 ## 任务状态
 
@@ -341,7 +341,7 @@ verified
 archived
 ```
 
-顶层 `status: "blocked"` 是 `/do` 根据子 task 状态汇总出来的任务级状态，表示当前任务没有可继续推进的执行项，需要用户、权限、外部条件或计划调整后才能继续。具体原因保存在对应 `tasks[].statusReason` 中。
+顶层 `status: "blocked"` 是 `/do` 根据子 task 状态汇总出来的任务级状态，表示当前任务没有可继续推进的执行项，需要用户、权限、外部条件或计划调整后才能继续。具体原因保存在对应 `subtasks[].statusReason` 中。
 
 任务阶段：
 
@@ -439,9 +439,9 @@ helper 写状态时应使用轻量锁：
 
 - `task.json` 面向机器读写。
 - `plan.md` 面向人类阅读和讨论。
-- `tasks[]` 面向 executor 子 agent。
-- `tasks[].steps[]` 面向 executor 子 agent 的动作拆解，可以嵌套表达复杂动作层级。
-- `tasks[].checks[]` 面向 review/verifier 子 agent 的检查清单。
+- `subtasks[]` 面向 executor 子 agent。
+- `subtasks[].steps[]` 面向 executor 子 agent 的动作拆解，可以嵌套表达复杂动作层级。
+- `subtasks[].checks[]` 面向 review/verifier 子 agent 的检查清单。
 - 归档时移动整个任务目录，后续扩展少量附件不需要改变路径模型。
 
 接受的取舍：

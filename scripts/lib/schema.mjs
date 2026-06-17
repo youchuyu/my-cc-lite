@@ -1,6 +1,6 @@
 const STAGE_NAMES = ["planning", "execution", "review"];
 const HELPER_TYPES = new Set(["skill", "agent", "tool"]);
-const TASK_STATUSES = new Set(["pending", "in_progress", "completed", "failed", "blocked", "skipped"]);
+const SUBTASK_STATUSES = new Set(["pending", "in_progress", "completed", "failed", "blocked", "skipped"]);
 const TOP_LEVEL_TASK_STATUSES = new Set(["active", "blocked", "verified", "archived"]);
 const TASK_STAGES = new Set(["executing", "verifying", "verified", "archived"]);
 const VERIFICATION_STATUSES = new Set(["not_started", "passed", "needs_fix", "blocked"]);
@@ -81,24 +81,24 @@ export function normalizeDoMaterializeInput(input) {
     throw new StateError("INVALID_INPUT", "materialize input must be a JSON object.");
   }
   const objective = normalizeRequiredString(input.objective, "objective");
-  if (!Array.isArray(input.tasks) || input.tasks.length === 0) {
-    throw new StateError("INVALID_INPUT", "tasks must be a non-empty array.");
+  if (!Array.isArray(input.subtasks) || input.subtasks.length === 0) {
+    throw new StateError("INVALID_INPUT", "subtasks must be a non-empty array.");
   }
   const seen = new Set();
-  const tasks = input.tasks.map((entry, index) => {
-    const task = normalizeTaskEntry(entry, "INVALID_INPUT");
-    if (task.status !== "pending") {
-      throw new StateError("INVALID_INPUT", `tasks[${index}].status must be pending.`);
+  const subtasks = input.subtasks.map((entry, index) => {
+    const subtask = normalizeSubtaskEntry(entry, "INVALID_INPUT");
+    if (subtask.status !== "pending") {
+      throw new StateError("INVALID_INPUT", `subtasks[${index}].status must be pending.`);
     }
-    if (seen.has(task.id)) {
-      throw new StateError("INVALID_INPUT", `Duplicate task id: ${task.id}.`);
+    if (seen.has(subtask.id)) {
+      throw new StateError("INVALID_INPUT", `Duplicate subtask id: ${subtask.id}.`);
     }
-    seen.add(task.id);
-    return task;
+    seen.add(subtask.id);
+    return subtask;
   });
   return {
     objective,
-    tasks
+    subtasks
   };
 }
 
@@ -113,8 +113,8 @@ export function normalizeDoTaskPatch(input) {
   }
   const id = normalizeRequiredString(input.id, "id");
   const status = normalizeRequiredString(input.status, "status");
-  if (!TASK_STATUSES.has(status)) {
-    throw new StateError("INVALID_INPUT", `status must be one of: ${[...TASK_STATUSES].join(", ")}.`);
+  if (!SUBTASK_STATUSES.has(status)) {
+    throw new StateError("INVALID_INPUT", `status must be one of: ${[...SUBTASK_STATUSES].join(", ")}.`);
   }
   const statusReason = typeof input.statusReason === "string" ? input.statusReason.trim() : "";
   if (["blocked", "failed", "skipped"].includes(status) && !statusReason) {
@@ -206,14 +206,14 @@ export function validateTask(task) {
   }
   normalizeRequiredString(task.createdAt, "createdAt", "INVALID_TASK_STATE");
   normalizeRequiredString(task.updatedAt, "updatedAt", "INVALID_TASK_STATE");
-  if (!Array.isArray(task.tasks) || task.tasks.length === 0) {
-    throw new StateError("INVALID_TASK_STATE", "tasks must be a non-empty array.");
+  if (!Array.isArray(task.subtasks) || task.subtasks.length === 0) {
+    throw new StateError("INVALID_TASK_STATE", "subtasks must be a non-empty array.");
   }
   const seen = new Set();
-  for (const entry of task.tasks) {
-    const normalized = validateTaskEntry(entry, "INVALID_TASK_STATE");
+  for (const entry of task.subtasks) {
+    const normalized = validateSubtaskEntry(entry, "INVALID_TASK_STATE");
     if (seen.has(normalized.id)) {
-      throw new StateError("INVALID_TASK_STATE", `Duplicate task id: ${normalized.id}.`);
+      throw new StateError("INVALID_TASK_STATE", `Duplicate subtask id: ${normalized.id}.`);
     }
     seen.add(normalized.id);
   }
@@ -242,8 +242,8 @@ export function validateTask(task) {
   return task;
 }
 
-export function validateTaskEntry(entry, code = "INVALID_TASK_STATE") {
-  return normalizeTaskEntry(entry, code);
+export function validateSubtaskEntry(entry, code = "INVALID_TASK_STATE") {
+  return normalizeSubtaskEntry(entry, code);
 }
 
 export function validateSteps(steps, code = "INVALID_TASK_STATE") {
@@ -260,12 +260,12 @@ export function validateChecks(checks, code = "INVALID_TASK_STATE") {
   return checks.map((check) => normalizeRequiredString(check, "check", code));
 }
 
-export function summarizeTask(task) {
+export function summarizeSubtask(subtask) {
   return {
-    id: task.id,
-    title: task.title,
-    status: task.status,
-    statusReason: task.statusReason || ""
+    id: subtask.id,
+    title: subtask.title,
+    status: subtask.status,
+    statusReason: subtask.statusReason || ""
   };
 }
 
@@ -286,18 +286,18 @@ export function assertInitializedProject(project) {
 
 export function assertVerifiableTask(task) {
   validateTask(task);
-  if (task.tasks.length === 0) {
-    throw new StateError("TASK_NOT_VERIFIABLE", "task.json tasks must be non-empty before /verify.");
+  if (task.subtasks.length === 0) {
+    throw new StateError("TASK_NOT_VERIFIABLE", "task.json subtasks must be non-empty before /verify.");
   }
-  const unfinished = task.tasks.find((entry) => !["completed", "skipped"].includes(entry.status));
+  const unfinished = task.subtasks.find((entry) => !["completed", "skipped"].includes(entry.status));
   if (unfinished) {
     throw new StateError(
       "TASK_NOT_VERIFIABLE",
-      `Task ${unfinished.id} is ${unfinished.status}. Return to /do before /verify.`
+      `Subtask ${unfinished.id} is ${unfinished.status}. Return to /do before /verify.`
     );
   }
-  if (!task.tasks.some((entry) => entry.status === "completed")) {
-    throw new StateError("TASK_NOT_VERIFIABLE", "At least one task must be completed before /verify.");
+  if (!task.subtasks.some((entry) => entry.status === "completed")) {
+    throw new StateError("TASK_NOT_VERIFIABLE", "At least one subtask must be completed before /verify.");
   }
   return task;
 }
@@ -391,18 +391,18 @@ function normalizeHelper(helper) {
   return { name, type, invoke, description };
 }
 
-function normalizeTaskEntry(entry, code) {
+function normalizeSubtaskEntry(entry, code) {
   if (!isPlainObject(entry)) {
-    throw new StateError(code, "task entry must be a JSON object.");
+    throw new StateError(code, "subtask entry must be a JSON object.");
   }
-  const id = normalizeRequiredString(entry.id, "task.id", code);
-  const title = normalizeRequiredString(entry.title, "task.title", code);
-  const status = normalizeTaskStatus(entry.status ?? "pending", code);
+  const id = normalizeRequiredString(entry.id, "subtask.id", code);
+  const title = normalizeRequiredString(entry.title, "subtask.title", code);
+  const status = normalizeSubtaskStatus(entry.status ?? "pending", code);
   const steps = validateSteps(entry.steps ?? [], code);
   const checks = validateChecks(entry.checks ?? [], code);
   const statusReason = typeof entry.statusReason === "string" ? entry.statusReason.trim() : "";
   if (["blocked", "failed", "skipped"].includes(status) && !statusReason) {
-    throw new StateError(code, `statusReason is required when task ${id} status is ${status}.`);
+    throw new StateError(code, `statusReason is required when subtask ${id} status is ${status}.`);
   }
   return {
     id,
@@ -414,10 +414,10 @@ function normalizeTaskEntry(entry, code) {
   };
 }
 
-function normalizeTaskStatus(value, code) {
-  const status = normalizeRequiredString(value, "task.status", code);
-  if (!TASK_STATUSES.has(status)) {
-    throw new StateError(code, `task.status must be one of: ${[...TASK_STATUSES].join(", ")}.`);
+function normalizeSubtaskStatus(value, code) {
+  const status = normalizeRequiredString(value, "subtask.status", code);
+  if (!SUBTASK_STATUSES.has(status)) {
+    throw new StateError(code, `subtask.status must be one of: ${[...SUBTASK_STATUSES].join(", ")}.`);
   }
   return status;
 }
