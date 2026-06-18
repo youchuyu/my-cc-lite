@@ -85,7 +85,7 @@ level: 3
 
 <Output_Constraints>
 
-- 顶层字段只包含 `result`、`objective`、`tasks`、`shouldStopAfterMaterialize` 和 `reason`。
+- 顶层字段只包含 `result`、`objective`、`subtasks`、`shouldStopAfterMaterialize` 和 `reason`。
 - `result` 只能是 `ready`、`coarse_ready`、`needs_plan_update` 或 `blocked`。
 - `subtasks[]` 条目只包含 `id`、`title`、`steps[]` 和 `checks[]`。
 - `task` 的 `steps[]` 和 `checks[]` 中要尽可能完整保留或补充plan 中的内容。

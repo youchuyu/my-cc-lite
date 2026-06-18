@@ -10,8 +10,8 @@ level: 2
 
 <Inputs>
 
-- 当前 task entry：`id`、`title`、`steps[]`、`checks[]`。
-- executor 的简短执行摘要。
+- 当前 task entry：`id`、`title`、`checks[]`。
+- executor 的简短执行摘要（含执行过程中运行的命令及结果）。
 - 必要文件上下文、命令输出摘要或用户补充信息。
 
 </Inputs>
@@ -44,7 +44,7 @@ level: 2
 ```text
 result: passed | needs_fix | blocked
 reason: <short reason>
-next: <do | executor | debugger | user_decision>
+next: <do — checks 未满足但可收敛时 | debugger — 有明确报错需要定位时 | user_decision — 证据不足或需要人工决策时>
 ```
 
 </Output_Format>

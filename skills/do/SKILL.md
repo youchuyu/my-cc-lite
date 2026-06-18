@@ -145,7 +145,7 @@ node <pluginRoot>/scripts/run.mjs do inspect
 ```json
 {
   "objective": "Objective snapshot derived from plan.md",
-  "tasks": [
+  "subtasks": [
     {
       "id": "Tn",
       "title": "...",
@@ -156,7 +156,7 @@ node <pluginRoot>/scripts/run.mjs do inspect
 }
 ```
 
-如果 agent `task-materializer` 返回的是带流程控制字段的完整结果，调用 `materialize` 前只传入 `objective` 和 `tasks`。`result`、`shouldStopAfterMaterialize` 和 `reason` 只由 `/do` skill 用于流程判断，不传给脚本。
+如果 agent `task-materializer` 返回的是带流程控制字段的完整结果，调用 `materialize` 前只传入 `objective` 和 `subtasks`。`result`、`shouldStopAfterMaterialize` 和 `reason` 只由 `/do` skill 用于流程判断，不传给脚本。
 
 状态更新：
 

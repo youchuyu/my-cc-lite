@@ -6,8 +6,8 @@ my-cc-lite 原生接管和外部高阶接管共享同一套状态边界。
 
 `/do` 阶段只负责推进当前任务的执行状态：
 
-- `tasks[].status`
-- `tasks[].statusReason`
+- `subtasks[].status`
+- `subtasks[].statusReason`
 - 由脚本维护的顶层 `status`
 - 由脚本维护的顶层 `updatedAt`
 
