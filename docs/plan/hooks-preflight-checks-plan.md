@@ -259,7 +259,6 @@ scripts/lib/preflight.mjs
 
 - `/plan` 继续由 `assertInitializedProject` 和 `assertNoActiveTask` 兜底。
 - `/do` 继续从 `inspect` 开始。
-- `/verify` 继续由 `assertVerifiableTask` 兜底。
 - `/archive` 继续由 `assertArchivableTask`、`taskId` 目录一致性和归档目标存在性检查兜底。
 
 这样 hooks 可以减少模型误入错误阶段，但不会改变当前“scripts 负责确定性状态读写和校验”的主边界。

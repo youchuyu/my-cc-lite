@@ -284,24 +284,6 @@ export function assertInitializedProject(project) {
   return project;
 }
 
-export function assertVerifiableTask(task) {
-  validateTask(task);
-  if (task.subtasks.length === 0) {
-    throw new StateError("TASK_NOT_VERIFIABLE", "task.json subtasks must be non-empty before /verify.");
-  }
-  const unfinished = task.subtasks.find((entry) => !["completed", "skipped"].includes(entry.status));
-  if (unfinished) {
-    throw new StateError(
-      "TASK_NOT_VERIFIABLE",
-      `Subtask ${unfinished.id} is ${unfinished.status}. Return to /do before /verify.`
-    );
-  }
-  if (!task.subtasks.some((entry) => entry.status === "completed")) {
-    throw new StateError("TASK_NOT_VERIFIABLE", "At least one subtask must be completed before /verify.");
-  }
-  return task;
-}
-
 export function assertArchivableTask(task) {
   validateTask(task);
   if (task.status === "archived") {

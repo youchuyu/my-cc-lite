@@ -14,7 +14,7 @@ disable-model-invocation: true
 
 当用户手动调用 `/verify`，或明确要求验收当前 my-cc-lite 任务时使用。
 
-当前工作目录应是目标项目根目录。显式 `/verify` 的静态入口条件由 preflight hook 提前阻断，verify 阶段脚本也会再次硬校验。
+当前工作目录应是目标项目根目录。显式 `/verify` 的静态入口条件由 preflight hook 提前阻断。
 
 ## 进入条件
 

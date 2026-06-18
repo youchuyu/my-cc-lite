@@ -27,7 +27,6 @@ async function main(argv) {
 
 async function inspect() {
   const projectRoot = process.cwd();
-  assertInitializedProject(await readProject(projectRoot));
   const taskDir = await requireCurrentTaskDir(projectRoot);
   const planPath = path.join(taskDir, "plan.md");
   const planContent = await readPlan(taskDir);

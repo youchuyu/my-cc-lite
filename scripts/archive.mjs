@@ -28,7 +28,6 @@ async function main(argv) {
   }
   const input = normalizeArchiveInput(await readStdinJson());
   const projectRoot = process.cwd();
-  assertInitializedProject(await readProject(projectRoot));
   return await withStateLock(
     projectRoot,
     async () => {

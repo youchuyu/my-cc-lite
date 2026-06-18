@@ -3,14 +3,12 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { nowIso } from "./lib/format.mjs";
 import {
-  assertInitializedProject,
-  assertVerifiableTask,
   normalizeVerifyCompleteInput,
   StateError,
   summarizeSubtask,
   summarizeVerification
 } from "./lib/schema.mjs";
-import { getCurrentTaskDir, readPlan, readProject, readTask, withStateLock, writeTask } from "./lib/state.mjs";
+import { getCurrentTaskDir, readTask, withStateLock, writeTask } from "./lib/state.mjs";
 
 async function main(argv) {
   const command = argv[2];
@@ -19,19 +17,15 @@ async function main(argv) {
   }
   const input = normalizeVerifyCompleteInput(await readStdinJson());
   const projectRoot = process.cwd();
-  assertInitializedProject(await readProject(projectRoot));
   return await withStateLock(
     projectRoot,
     async () => {
-      assertInitializedProject(await readProject(projectRoot));
       const taskDir = await requireCurrentTaskDir(projectRoot);
       const planPath = path.join(taskDir, "plan.md");
-      await readPlan(taskDir);
       const task = await readTask(taskDir);
       if (!task) {
         throw new StateError("TASK_STATE_NOT_FOUND", "Current task is missing task.json. Run /do before /verify.");
       }
-      assertVerifiableTask(task);
       applyVerificationResult(task, input);
       const taskPath = await writeTask(taskDir, task);
       return {
