@@ -25,25 +25,31 @@ disable-model-invocation: true
 
 ## 执行步骤
 
-1. 读取脚本可访问的当前 `plan.md` 和 `task.json` 上下文。
-2. 根据 `plan.md`、`task.json.objective`、`subtasks[]` 和 `checks[]` 形成最终验收判断。
-3. 必要时调用 `project.json.stageHelpers.review` 中明确匹配的 review helper。
-4. 必要时读取相关项目文件或运行轻量检查命令；这些上下文只服务本轮判断，不落盘。
-5. 在 `passed`、`needs_fix`、`blocked` 中选择一个结论。
-6. 调用 verify 阶段脚本执行 `complete`，通过 stdin 传入 JSON。
-7. 如果脚本返回入口条件或状态错误，停止并按错误码说明下一步。
-8. 向用户返回结论、简短原因、写入摘要和下一步。
+1. 上下文已注入 `objective`、`verification.status`（上一轮）、`subtasks[]`（含 `checks[]`）和可用的 review helpers。扫描所有 `checks[]`，判断是否需要主动验证：
+   - 若所有 checks 都可以从代码或配置静态推断 → 跳过规划，直接进入 **步骤 3**。
+   - 若满足以下任一条件 → 进入 **步骤 2** 制定验证计划：
+     - checks 涉及运行时行为（UI 渲染、交互、命令输出、网络请求）
+     - checks 表述模糊（如"正常工作"、"符合预期"）
+     - 上一轮 `verification.status` 是 `needs_fix`（需确认修复是否生效）
+
+2. 按 `reference/verification-plan.md` 制定验证计划，向用户展示，并使用 `AskUserQuestion` 向用户确认，然后确认后执行验证计划。
+
+3. 仅当 `checks[]` 出现歧义或明显不完整时，才读取 `plan.md` 作为仲裁来源；否则跳过。
+
+4. 基于 `checks[]`、验证结果（如有）形成最终判断，在 `passed`、`needs_fix`、`blocked` 中选择一个结论。
+
+5. 调用 verify 阶段脚本执行 `complete`，通过 stdin 传入 JSON。
+
+6. 如果脚本返回入口条件或状态错误，停止并按错误码说明下一步。
+
+7. 向用户返回结论、简短原因、写入摘要和下一步。
 
 ## 判断依据
 
-- `plan.md` 是最终人类语义来源。
-- `task.json.objective` 是执行目标快照。
-- `task.json.subtasks[]` 和 `checks[]` 是 `/do` 阶段固化的执行检查结构。
-- 必要项目文件、轻量命令输出摘要、review helper 输出或用户补充说明可以作为本轮判断依据。
-
-如果 `plan.md` 和 `task.json` 轻微表述不同，以 `plan.md` 判断目标和验收口径，以 `task.json` 判断执行结果是否支撑通过。
-
-如果差异会影响通过判断，不要改写状态强行通过；返回 `blocked`，或提示回到 `/plan` / `/do`。
+- `subtasks[].checks[]` 是首要验收标准；`objective` 是目标快照。
+- `plan.md` 是兜底仲裁来源，仅在 `checks[]` 出现歧义或明显不完整时使用。
+- `checks[]` 与 `plan.md` 不一致时，以 `plan.md` 为准；但这表明 `/do` 阶段的 `checks[]` 质量有问题，应在 `summary` 中说明。
+- 项目文件、命令输出、review helper 输出或用户补充说明只作为本轮判断的支撑证据，不落盘。
 
 ## 结论处理
 

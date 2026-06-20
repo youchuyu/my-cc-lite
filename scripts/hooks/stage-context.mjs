@@ -151,7 +151,7 @@ async function buildDoContext(_project, projectRoot) {
   ].join("\n");
 }
 
-async function buildVerifyContext(_project, projectRoot) {
+async function buildVerifyContext(project, projectRoot) {
   let taskDir;
   try {
     taskDir = await getCurrentTaskDir(projectRoot);
@@ -161,15 +161,21 @@ async function buildVerifyContext(_project, projectRoot) {
   if (!taskDir) return "";
   const task = await readTask(taskDir).catch(() => null);
   if (!task) return "";
-  const taskLines = task.subtasks.map(
-    (t) => `  - ${t.id} [${t.status}]: "${t.title}"`,
-  );
+  const taskLines = task.subtasks.flatMap((t) => {
+    const header = `  - ${t.id} [${t.status}]: "${t.title}"`;
+    if (t.checks.length === 0) return [header];
+    return [header, ...t.checks.map((c) => `    - check: ${c}`)];
+  });
+  const reviewHelpers = selectStageHelpers(project, { sourceStage: "review" });
+  const reviewLines = reviewHelpers.map((h) => `  - ${h.name} (${h.invoke}): ${h.description}`);
   return [
     "my-cc-lite /verify 入口状态:",
+    `- projectSummary: ${project.projectSummary}`,
     `- objective: ${task.objective}`,
     `- verification.status: ${task.verification.status}`,
     "- subtasks:",
     ...taskLines,
+    ...(reviewLines.length > 0 ? ["- review helpers:", ...reviewLines] : []),
   ].join("\n");
 }
 

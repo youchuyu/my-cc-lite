@@ -119,7 +119,7 @@ function doResult(state) {
   const taskAvailability = currentTaskResult("do", state);
   if (taskAvailability) return taskAvailability;
   if (state.task.exists && !state.task.valid) {
-    return block("task state is invalid; inspect .my-cc-lite/tasks/*/task.json before continuing.");
+    return block(`task state is invalid (${state.task.errorMessage}); inspect .my-cc-lite/tasks/*/task.json before continuing.`);
   }
   return noMessage();
 }
@@ -174,7 +174,7 @@ function currentTaskResult(stage, state) {
 
 function taskStateResult(state) {
   if (state.task.exists && !state.task.valid) {
-    return block("task state is invalid; inspect .my-cc-lite/tasks/*/task.json before continuing.");
+    return block(`task state is invalid (${state.task.errorMessage}); inspect .my-cc-lite/tasks/*/task.json before continuing.`);
   }
   return null;
 }
