@@ -173,7 +173,7 @@ async function buildVerifyContext(project, projectRoot) {
     `- verification.status: ${task.verification.status}`,
     "- checks（subtasks[].checks[]）:",
     ...checkLines,
-    "以上 checks[] 是首要验收标准；结合 projectSummary 判断哪些分组对当前项目有意义，按 reference/verification-plan.md 规则从前往后分组制定全量验证计划。",
+    "以上 checks[] 是首要验收标准；按 reference/verification-plan.md 规则从前往后分组制定全量验证计划。",
   ].join("\n");
 }
 
