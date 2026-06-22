@@ -167,7 +167,7 @@ async function buildVerifyContext(project, projectRoot) {
     return [header, ...t.checks.map((c) => `    - ${c}`)];
   });
   return [
-    "my-cc-lite /verify Hooks注入状态:",
+    "my-cc-lite:verify Hooks注入状态:",
     `- projectSummary: ${project.projectSummary}`,
     `- objective: ${task.objective}`,
     `- verification.status: ${task.verification.status}`,

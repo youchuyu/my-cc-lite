@@ -16,16 +16,9 @@ disable-model-invocation: true
 
 当前工作目录应是目标项目根目录。显式 `/verify` 的静态入口条件由 preflight hook 提前阻断。
 
-## 进入条件
-
-进入 skill 后只做两件事：
-
-1. 基于 hooks 注入的 `checks[]`、`objective` 和 `projectSummary` 形成最终验收判断。
-2. 如果脚本返回入口条件错误，按错误码提示下一步，不自行修改状态文件。
-
 ## 执行步骤
 
-1. 扫描 hooks 注入的 `checks[]`，结合 `projectSummary` 判断哪些分组对当前项目类型有意义（web 应用优先浏览器验证，CLI 工具优先命令验证，library 优先测试命令），按验证逻辑从前往后自然分组（例如：静态检查 → 命令验证 → 浏览器验证），按 `reference/verification-plan.md` 的规则和格式形成全量验证计划草稿。
+1. 根据 `my-cc-lite:verify Hooks注入状态` 判断哪些分组对当前项目类型有意义（web 应用优先浏览器验证，CLI 工具优先命令验证，library 优先测试命令），按验证逻辑从前往后自然分组（例如：静态检查 → 命令验证 → 浏览器验证），按 `reference/verification-plan.md` 的规则和格式形成全量验证计划草稿。
 
 2. 通过 `AskUserQuestion` 向用户展示验证计划，询问是否需要补充；若缺少必要参数（如 dev server 启动命令、目标代理 URL 等），在此阶段一并与用户确认，计划定稿后再继续执行。
 
@@ -48,7 +41,7 @@ disable-model-invocation: true
 
 - `subtasks[].checks[]` 是首要验收标准；`objective` 是目标快照。判断基于进入 verify 时目标项目的代码状态；verify 执行过程中发现的代码问题应体现在结论（`needs_fix` 或 `blocked`）中，不得当场修复后以修复后状态形成 `passed` 结论。
 - `plan.md` 仅在 hooks 注入失败或 `checks[]` 字段为空时作为兜底补充，正常流程不主动读取。`checks[]` 本身来源于 `plan.md`，若两者不一致说明注入环节有问题，应在 `summary` 中说明，不自动以 `plan.md` 覆盖。
-- 项目文件、命令输出、review helper 输出或用户补充说明只作为本轮判断的支撑证据，不落盘。
+- 项目文件、命令输出或用户补充说明只作为本轮判断的支撑证据，不落盘。
 
 ## 结论处理
 
@@ -154,8 +147,7 @@ node scripts/run.mjs verify complete
 - 不修改已有 `subtasks[]`、`steps[]` 或 `checks[]`。
 - 不保存完整 review 报告、命令日志、changed files、事件日志或证据文件。
 - 不自动调用 `/do` 修复。
-- 不自动调用 `/archive` 归档。
-- 不让 review helper 直接调用阶段脚本或写入状态。
+- 不自动调用 `/archive` 归档。。
 
 ## 错误处理
 
