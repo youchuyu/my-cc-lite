@@ -4,6 +4,7 @@ import path from "node:path";
 import { nowIso } from "./lib/format.mjs";
 import {
   normalizeVerifyCompleteInput,
+  normalizeVerifyAppendRepairsInput,
   StateError,
   summarizeSubtask,
   summarizeVerification
@@ -12,11 +13,34 @@ import { getCurrentTaskDir, readTask, withStateLock, writeTask } from "./lib/sta
 
 async function main(argv) {
   const command = argv[2];
-  if (command !== "complete") {
-    throw new StateError("INVALID_INPUT", "Expected command: complete.");
+  if (command !== "complete" && command !== "append-repairs") {
+    throw new StateError("INVALID_INPUT", "Expected command: complete or append-repairs.");
+  }
+  const projectRoot = process.cwd();
+  if (command === "append-repairs") {
+    const input = normalizeVerifyAppendRepairsInput(await readStdinJson());
+    return await withStateLock(
+      projectRoot,
+      async () => {
+        const taskDir = await requireCurrentTaskDir(projectRoot);
+        const task = await readTask(taskDir);
+        if (!task) {
+          throw new StateError("TASK_STATE_NOT_FOUND", "Current task is missing task.json. Run /do before /verify.");
+        }
+        const repairTasks = buildRepairTasks(task.subtasks, input.repairTasks);
+        task.subtasks.push(...repairTasks);
+        task.updatedAt = nowIso();
+        const taskPath = await writeTask(taskDir, task);
+        return {
+          taskId: task.taskId,
+          appended: repairTasks.map((t) => ({ id: t.id, title: t.title })),
+          taskPath
+        };
+      },
+      { operation: "verify-append-repairs" }
+    );
   }
   const input = normalizeVerifyCompleteInput(await readStdinJson());
-  const projectRoot = process.cwd();
   return await withStateLock(
     projectRoot,
     async () => {
@@ -61,8 +85,6 @@ function applyVerificationResult(task, input) {
       summary: input.summary
     };
   } else if (input.status === "needs_fix") {
-    const repairTasks = buildRepairTasks(task.subtasks, input.repairTasks);
-    task.subtasks.push(...repairTasks);
     task.status = "active";
     task.stage = "executing";
     task.verification = {
@@ -132,25 +154,14 @@ async function readStdinJson() {
 }
 
 function verifyHelpText() {
-  return `Usage: node scripts/verify.mjs complete < input.json
-
-Write the final /verify result to the unique active task's task.json.
+  return `Usage: node scripts/verify.mjs <command> < input.json
 
 Commands:
-  complete    Read JSON from stdin and write passed, needs_fix, or blocked
+  append-repairs  Append repair tasks to the active task's subtasks[].
+                  Input: { "repairTasks": [{ "title", "steps", "checks" }] }
 
-Input JSON:
-  {
-    "status": "passed | needs_fix | blocked",
-    "summary": "Short verification result summary",
-    "repairTasks": [
-      {
-        "title": "Fix verification issue",
-        "steps": ["Do the bounded repair"],
-        "checks": ["The original plan.md acceptance criteria are satisfied"]
-      }
-    ]
-  }
+  complete        Write the final verification result to task.json.
+                  Input: { "status": "passed | needs_fix | blocked", "summary": "..." }
 `;
 }
 

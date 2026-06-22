@@ -20,20 +20,21 @@ disable-model-invocation: true
 
 进入 skill 后只做两件事：
 
-1. 基于脚本可读取的当前 `plan.md` 和 `task.json` 形成最终验收判断。
+1. 基于 hooks 注入的 `checks[]`、`objective` 和 `projectSummary` 形成最终验收判断。
 2. 如果脚本返回入口条件错误，按错误码提示下一步，不自行修改状态文件。
 
 ## 执行步骤
 
-1. 上下文已注入 `objective`、`verification.status`（上一轮）、`subtasks[]`（含 `checks[]`）和可用的 review helpers。扫描所有 `checks[]`，对可从代码或配置静态推断的 checks 立即执行静态检查，结果暂存为当前上下文中的证据，不写 `task.json`，不修改目标项目代码。
-   - 若所有 checks 均已静态覆盖 → 直接进入 **步骤 3**。
-   - 若存在以下任一情况 → 进入 **步骤 2**：checks 涉及运行时行为（UI 渲染、交互、命令输出、网络请求）、checks 表述模糊无法静态判断、上一轮 `verification.status` 是 `needs_fix`。
+1. 扫描Hooks中所有注入的 `checks[]`，结合注入的 `projectSummary` 判断哪些分组对当前项目类型有意义（如 web 应用优先考虑浏览器验证，CLI 工具优先命令验证，library 优先测试命令），按验证逻辑从前往后自然分组（例如：静态检查 → 命令验证 → 浏览器验证），按 `reference/verification-plan.md` 的规则和格式制定全量验证计划并向用户展示。计划展示后立即开始执行第一组，不等待用户确认。若缺少必要参数（如 dev server 启动命令、目标 URL），在计划中标注为"待确认"，但不阻塞前序已确定的分组。到达待确认分组时，优先通过 `AskUserQuestion` 向用户请求缺失参数，等待回复后继续。
 
-2. 针对静态无法覆盖的 checks（涉及运行时行为、表述模糊、或上一轮 `verification.status` 是 `needs_fix`），按 `reference/verification-plan.md` 制定验证计划并向用户展示，使用 `AskUserQuestion` 询问是否执行（若缺少必要参数如 dev server 启动命令或目标 URL，一并在此说明）；确认后按组依次执行。
+2. 按步骤 1 确定的分组顺序依次执行。每组完成后：
+   - 若发现需要修复的 checks，立即按修复入口整理 repair subtasks，调用 `append-repairs` 脚本写入 task.json，再进入下一组。
+   - 若遇到真正的环境性障碍无法继续，停止执行，直接进入步骤 4 形成 `blocked` 结论；之前各组已写入的 repair subtasks 保留在 task.json 中。
+   - 若当组无问题，直接进入下一组。
 
-3. 仅当 `checks[]` 出现歧义或明显不完整时，才读取 `plan.md` 作为仲裁来源；否则跳过。
+3. 仅当 hooks 注入失败或 `checks[]` 字段为空时，才读取 `plan.md` 作为补充；正常注入流程下跳过，不主动读取。
 
-4. 在所有已规划分组的验证执行完成之前，不形成最终结论。所有验证完成后，基于全量证据一次性形成判断，在 `passed`、`needs_fix`、`blocked` 中选择一个结论。
+4. 全部分组执行完成后，基于所有证据一次性形成判断，在 `passed`、`needs_fix`、`blocked` 中选择一个结论。
 
 5. 调用 verify 阶段脚本执行 `complete`，通过 stdin 传入 JSON。
 
@@ -44,13 +45,12 @@ disable-model-invocation: true
 ## 判断依据
 
 - `subtasks[].checks[]` 是首要验收标准；`objective` 是目标快照。判断基于进入 verify 时目标项目的代码状态；verify 执行过程中发现的代码问题应体现在结论（`needs_fix` 或 `blocked`）中，不得当场修复后以修复后状态形成 `passed` 结论。
-- `plan.md` 是兜底仲裁来源，仅在 `checks[]` 出现歧义或明显不完整时使用。
-- `checks[]` 与 `plan.md` 不一致时，以 `plan.md` 为准；但这表明 `/do` 阶段的 `checks[]` 质量有问题，应在 `summary` 中说明。
+- `plan.md` 仅在 hooks 注入失败或 `checks[]` 字段为空时作为兜底补充，正常流程不主动读取。`checks[]` 本身来源于 `plan.md`，若两者不一致说明注入环节有问题，应在 `summary` 中说明，不自动以 `plan.md` 覆盖。
 - 项目文件、命令输出、review helper 输出或用户补充说明只作为本轮判断的支撑证据，不落盘。
 
 ## 结论处理
 
-只有 `needs_fix` 会新增 repair task。`blocked` 表示当前无法在原计划范围内形成明确 repair task，因此只写入阻塞结论，不追加 `subtasks[]`。
+只有 `needs_fix` 会新增 repair subtask。`blocked` 表示当前无法继续执行验证，只写入阻塞结论；之前各组已通过 `append-repairs` 写入的 repair subtasks 保留，不再追加新的。
 
 `passed`：
 
@@ -60,8 +60,8 @@ disable-model-invocation: true
 
 `needs_fix`：
 
-- 用于验证未通过，但缺口可以收敛成一个或少量后续 `/do` 可执行 repair tasks。
-- 调用脚本把 repair tasks append 到 `subtasks[]` 末尾；同时将当前任务的顶层状态写为 `status: "active"`、`stage: "executing"`，并写入 `verification.status: "needs_fix"` 和 `verification.summary`。
+- 用于验证未通过，但缺口可以收敛成一个或少量后续 `/do` 可执行 repair subtasks。
+- Repair subtasks 已在各组验证结束时通过 `append-repairs` 写入 `subtasks[]`；`complete` 只负责将当前任务顶层状态写为 `status: "active"`、`stage: "executing"`，并写入 `verification.status: "needs_fix"` 和 `verification.summary`。
 - 下一步建议 `/do`。
 
 `blocked`：
@@ -71,19 +71,20 @@ disable-model-invocation: true
 - `summary` 必须说明两件事：**阻塞原因**（具体缺少什么条件）和**恢复条件**（满足什么条件后可重新运行 `/verify`）。只写"无法验证"或"缺少条件"不够，必须具体到用户可以采取行动的粒度。
 - 下一步建议处理外部阻塞或用户决策。
 
-## Repair Task
+## Repair Subtask
 
-`needs_fix` 的 repair task 必须满足：
+每组验证发现问题后，按以下约束整理 repair subtasks 并调用 `append-repairs` 写入：
 
 - 来源必须是原 `plan.md` 的目标、范围、验收口径，或已有 `subtasks[].checks[]`。
 - 不能引入新需求。
 - 不能扩大任务范围。
-- 以修复入口为单位生成 repair task：同一修复入口能覆盖的多个失败 checks 合并为一个 repair task，`checks[]` 列出全部受影响项；不同修复入口（涉及不同代码位置或独立根因）各自独立一个 repair task。不以 check 数量为上限，也不强制合并不相关问题。
+- 以修复入口为单位生成 repair subtask：同一修复入口能覆盖的多个失败 checks 合并为一个 repair subtask，`checks[]` 列出全部受影响项；不同修复入口（涉及不同代码位置或独立根因）各自独立一个 repair subtask。不以 check 数量为上限，也不强制合并不相关问题。
 - 只能 append 到 `subtasks[]` 末尾。
 - 不能删除、重排、合并、拆分或改写已有 task。
 - `steps[]` 和 `checks[]` 保持短，不保存完整 review 报告、命令输出、文件列表或 evidence。
+- 不同组产生的 repair subtasks 可能指向同一根因，不强制跨组合并；`/do` 执行时若发现某 repair subtask 已被修复，标记为 `skipped` 即可。
 
-repair task id 由脚本生成，输入不要包含 `id`、`status` 或 `statusReason`。
+repair subtask id 由脚本生成，输入不要包含 `id`、`status` 或 `statusReason`。
 
 ## 脚本输入
 
@@ -92,48 +93,54 @@ repair task id 由脚本生成，输入不要包含 `id`、`status` 或 `statusR
 - 如果当前工作目录存在 `scripts/run.mjs`，使用：
 
 ```bash
-node scripts/run.mjs verify complete
+node scripts/run.mjs verify <command>
 ```
 
 - 否则先定位 my-cc-lite 插件根目录，使用：
 
 ```bash
-node <pluginRoot>/scripts/run.mjs verify complete
+node <pluginRoot>/scripts/run.mjs verify <command>
 ```
 
 - 调用命令时不得切换到插件根目录；当前工作目录必须保持为目标项目根目录。
 - 如果无法定位插件根目录，停止并提示用户提供插件根目录；不要尝试调用 `/scripts/run.mjs`。
 
-脚本输入 JSON：
+### append-repairs
 
-- `status` 必须是 `passed`、`needs_fix` 或 `blocked`。
-- `summary` 必须是简短验证结论摘要。
-- 只有 `status: "needs_fix"` 时允许传入 `repairTasks`，且必须是非空数组。
-- `passed` 和 `blocked` 不传 `repairTasks`。
-- `repairTasks[]` 只包含 `title`、`steps` 和 `checks`，不要包含 `id`、`status` 或 `statusReason`。
+每组验证发现问题后立即调用，将 repair subtasks 写入 task.json：
 
-最小示例：
+```bash
+node scripts/run.mjs verify append-repairs
+```
+
+输入 JSON 只包含 `repairTasks`，字段约束与 Repair Subtask 章节相同：
+
+```json
+{
+  "repairTasks": [
+    {
+      "title": "Bounded repair subtask title",
+      "steps": ["Bounded repair step"],
+      "checks": ["Check tied to the original plan.md acceptance criteria"]
+    }
+  ]
+}
+```
+
+### complete
+
+所有分组执行完成后调用，写入最终结论：
+
+```bash
+node scripts/run.mjs verify complete
+```
+
+输入 JSON 只包含 `status` 和 `summary`，不传 `repairTasks`（已由 `append-repairs` 写入）：
 
 ```json
 {
   "status": "passed",
   "summary": "Short verification result summary."
-}
-```
-
-需要修复时：
-
-```json
-{
-  "status": "needs_fix",
-  "summary": "Short summary of the verification gap.",
-  "repairTasks": [
-    {
-      "title": "Bounded repair task title",
-      "steps": ["Bounded repair step"],
-      "checks": ["Check tied to the original plan.md acceptance criteria"]
-    }
-  ]
 }
 ```
 
@@ -161,5 +168,5 @@ node <pluginRoot>/scripts/run.mjs verify complete
 - 结论：`passed` / `needs_fix` / `blocked`。
 - 简短原因。
 - 写入的 `verification.summary`。
-- 如果是 `needs_fix`，列出新增 repair task id 和标题。
+- 如果是 `needs_fix`，列出新增 repair subtask id 和标题。
 - 下一步：`/archive`、`/do`、`/plan` 或用户决策。

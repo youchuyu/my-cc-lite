@@ -133,18 +133,18 @@ async function buildDoContext(_project, projectRoot) {
     return "";
   }
   if (!taskDir) {
-    return "my-cc-lite /do 入口状态:\n- task.exists: false";
+    return "my-cc-lite /do Hooks注入状态:\n- task.exists: false";
   }
   const task = await readTask(taskDir).catch(() => null);
   if (!task) {
-    return "my-cc-lite /do 入口状态:\n- task.exists: false";
+    return "my-cc-lite /do Hooks注入状态:\n- task.exists: false";
   }
   const taskLines = task.subtasks.map(
     (t) =>
       `  - ${t.id} [${t.status}]: "${t.title}"${t.statusReason ? ` (${t.statusReason})` : ""}`,
   );
   return [
-    "my-cc-lite /do 入口状态:",
+    "my-cc-lite /do Hooks注入状态:",
     `- task.exists: true, status: ${task.status}, stage: ${task.stage}`,
     "- subtasks:",
     ...taskLines,
@@ -161,21 +161,19 @@ async function buildVerifyContext(project, projectRoot) {
   if (!taskDir) return "";
   const task = await readTask(taskDir).catch(() => null);
   if (!task) return "";
-  const taskLines = task.subtasks.flatMap((t) => {
+  const checkLines = task.subtasks.flatMap((t) => {
     const header = `  - ${t.id} [${t.status}]: "${t.title}"`;
     if (t.checks.length === 0) return [header];
-    return [header, ...t.checks.map((c) => `    - check: ${c}`)];
+    return [header, ...t.checks.map((c) => `    - ${c}`)];
   });
-  const reviewHelpers = selectStageHelpers(project, { sourceStage: "review" });
-  const reviewLines = reviewHelpers.map((h) => `  - ${h.name} (${h.invoke}): ${h.description}`);
   return [
-    "my-cc-lite /verify 入口状态:",
+    "my-cc-lite /verify Hooks注入状态:",
     `- projectSummary: ${project.projectSummary}`,
     `- objective: ${task.objective}`,
     `- verification.status: ${task.verification.status}`,
-    "- subtasks:",
-    ...taskLines,
-    ...(reviewLines.length > 0 ? ["- review helpers:", ...reviewLines] : []),
+    "- checks（subtasks[].checks[]）:",
+    ...checkLines,
+    "以上 checks[] 是首要验收标准；结合 projectSummary 判断哪些分组对当前项目有意义，按 reference/verification-plan.md 规则从前往后分组制定全量验证计划。",
   ].join("\n");
 }
 

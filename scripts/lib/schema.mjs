@@ -132,7 +132,7 @@ export function normalizeVerifyCompleteInput(input) {
     throw new StateError("INVALID_INPUT", "complete input must be a JSON object.");
   }
   for (const key of Object.keys(input)) {
-    if (!["status", "summary", "repairTasks"].includes(key)) {
+    if (!["status", "summary"].includes(key)) {
       throw new StateError("INVALID_INPUT", `Unsupported complete field: ${key}.`);
     }
   }
@@ -141,24 +141,22 @@ export function normalizeVerifyCompleteInput(input) {
     throw new StateError("INVALID_INPUT", "status must be one of: passed, needs_fix, blocked.");
   }
   const summary = normalizeRequiredString(input.summary, "summary");
-  if (status === "needs_fix") {
-    if (!Array.isArray(input.repairTasks) || input.repairTasks.length === 0) {
-      throw new StateError("INVALID_INPUT", "repairTasks must be a non-empty array when status is needs_fix.");
+  return { status, summary };
+}
+
+export function normalizeVerifyAppendRepairsInput(input) {
+  if (!isPlainObject(input)) {
+    throw new StateError("INVALID_INPUT", "append-repairs input must be a JSON object.");
+  }
+  for (const key of Object.keys(input)) {
+    if (key !== "repairTasks") {
+      throw new StateError("INVALID_INPUT", `Unsupported append-repairs field: ${key}.`);
     }
-    return {
-      status,
-      summary,
-      repairTasks: input.repairTasks.map(normalizeRepairTaskInput)
-    };
   }
-  if (Object.hasOwn(input, "repairTasks")) {
-    throw new StateError("INVALID_INPUT", "repairTasks is only supported when status is needs_fix.");
+  if (!Array.isArray(input.repairTasks) || input.repairTasks.length === 0) {
+    throw new StateError("INVALID_INPUT", "repairTasks must be a non-empty array.");
   }
-  return {
-    status,
-    summary,
-    repairTasks: []
-  };
+  return { repairTasks: input.repairTasks.map(normalizeRepairTaskInput) };
 }
 
 export function normalizeArchiveInput(input) {
