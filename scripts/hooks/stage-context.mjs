@@ -167,13 +167,15 @@ async function buildVerifyContext(project, projectRoot) {
     return [header, ...t.checks.map((c) => `    - ${c}`)];
   });
   return [
-    "my-cc-lite:verify Hooks注入状态:",
+    "<Verify_Hooks_Context>",
+    "my-cc-lite:verify Hooks注入:",
     `- projectSummary: ${project.projectSummary}`,
     `- objective: ${task.objective}`,
     `- verification.status: ${task.verification.status}`,
     "- checks（subtasks[].checks[]）:",
     ...checkLines,
-    "以上 checks[] 是首要验收标准；按 reference/verification-plan.md 规则从前往后分组制定全量验证计划。",
+    "以上 checks[] 是首要验收标准，依照 checks[] 按 reference/verification-plan.md 规则制定验证计划。",
+    "</Verify_Hooks_Context>",
   ].join("\n");
 }
 

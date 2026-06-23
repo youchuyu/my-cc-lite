@@ -10,14 +10,12 @@
 flowchart LR
     classDef stageBox fill:#fff8f0,stroke:#e65100,stroke-width:2px
     classDef stateWrite fill:#ede7f6,stroke:#4527a0,stroke-width:2px,stroke-dasharray: 5 5
-    classDef hookNote fill:#fffef5,stroke:#f9a825,stroke-width:1px,stroke-dasharray: 3 3,font-size:11px
     classDef routeBox fill:#f8f9fa,stroke:#78909c,stroke-width:1px
-    classDef productBox fill:#e0f2f1,stroke:#00695c,stroke-width:1px
+    classDef productBox fill:#e0f2f1,stroke:#00695c,stroke-width:1p
 
     START(["init"])
-    START --> INIT_HOOK
+    START --> INIT_ANALYZE
 
-    INIT_HOOK["UserPromptExpansion\nstage-preflight: 仅检查 activeTasks.count ≤ 1\nstage-context: 对 init 静默，不注入"]:::hookNote
     INIT_ANALYZE["分析项目结构\n识别项目类型"]:::stageBox
     INIT_SUMMARY["产出 projectSummary\n一句轻量项目摘要"]:::productBox
     INIT_HELPERS["产出 stageHelpers\n三个阶段 helper 清单"]:::stageBox
@@ -30,7 +28,7 @@ flowchart LR
 
     INIT_WRITE["Script: init init-project\n写入 project.json"]:::stateWrite
 
-    INIT_HOOK --> INIT_ANALYZE --> INIT_SUMMARY
+    INIT_ANALYZE --> INIT_SUMMARY
     INIT_ANALYZE --> INIT_HELPERS
     INIT_SUMMARY --> INIT_WRITE
     INIT_HELPERS --> H_PLANNING --> INIT_WRITE
@@ -55,9 +53,10 @@ flowchart LR
     classDef routeBox fill:#f8f9fa,stroke:#78909c,stroke-width:1px
     classDef decisionBox fill:#fff3e0,stroke:#e65100,stroke-width:2px
     classDef agentBox fill:#e0f7fa,stroke:#00838f,stroke-width:2px
+    classDef stopBox fill:#fce4ec,stroke:#c62828,stroke-width:1px
 
-    PLAN_PREFLIGHT["UserPromptExpansion ①\nstage-preflight: 检查 project.json 存在且有效\n无 active task（count=0）"]:::hookNote
-    PLAN_CONTEXT["UserPromptExpansion ②\nstage-context: 注入 projectSummary\n+ planning helpers\n+ execution skills（作为 Do 字段参考）"]:::hookNote
+    PLAN_PREFLIGHT["UserPromptExpansion: stage-preflight\nproject.json 存在且有效\n无 active task"]:::hookNote
+    PLAN_CONTEXT["UserPromptExpansion: stage-context\nprojectSummary + planning helpers\nexecution skills（作为 Do 字段参考）"]:::hookNote
     PLAN_METHOD{"计划生成方式?"}:::decisionBox
     PLAN_NATIVE["my-cc-lite /plan 原生\n直接基于本地上下文\n生成 plan 草案"]:::stageBox
     PLAN_DELEGATE(("第三方规划 skill/agent\n如 plan-hunter workflow\n生成计划草案")):::agentBox
@@ -65,7 +64,8 @@ flowchart LR
     PLAN_MERGE["确认定稿 final plan.md"]:::stageBox
     PLAN_WRITE["Script: plan create-task\n创建 tasks/taskId/ 目录\n写入 plan.md"]:::stateWrite
 
-    PLAN_PREFLIGHT --> PLAN_CONTEXT --> PLAN_METHOD
+    PLAN_PREFLIGHT -->|检查不通过| PLAN_BLOCK["阻断，提示原因"]:::stopBox
+    PLAN_PREFLIGHT -->|通过| PLAN_CONTEXT --> PLAN_METHOD
     PLAN_METHOD -->|原生生成| PLAN_NATIVE
     PLAN_METHOD -->|第三方委派| PLAN_DELEGATE --> PLAN_CONVERGE
     PLAN_NATIVE --> PLAN_MERGE
@@ -85,81 +85,75 @@ flowchart LR
     classDef stateWrite fill:#ede7f6,stroke:#4527a0,stroke-width:2px,stroke-dasharray: 5 5
     classDef agentBox fill:#e0f7fa,stroke:#00838f,stroke-width:2px
     classDef routeBox fill:#f8f9fa,stroke:#78909c,stroke-width:1px
-    classDef doneBox fill:#e0f2f1,stroke:#00695c,stroke-width:2px
     classDef backBox fill:#f1f8e9,stroke:#a5d6a7,stroke-width:1px,stroke-dasharray: 4 3
+    classDef stopBox fill:#fce4ec,stroke:#c62828,stroke-width:1px
     classDef hookNote fill:#fffef5,stroke:#f9a825,stroke-width:1px,stroke-dasharray: 3 3,font-size:11px
     classDef decisionBox fill:#fff3e0,stroke:#e65100,stroke-width:2px
 
-    subgraph PHASE_A["阶段 A — 检查与物化"]
-        DO_PREFLIGHT["UserPromptExpansion ①\nstage-preflight: 检查 plan.md 存在且非空\ntask.json 若存在需 valid"]:::hookNote
-        DO_CONTEXT["UserPromptExpansion ②\nstage-context: 注入 task 快照\n（status / stage / subtask 列表）"]:::hookNote
-        DO_INSPECT["Script: do inspect\n读取当前 plan.md + task.json"]:::stageBox
-        DO_EXISTS{"task.json 存在?"}:::decisionBox
+    DO_PREFLIGHT["UserPromptExpansion: stage-preflight\nplan.md 存在且非空\ntask.json 若存在需 valid"]:::hookNote
+    DO_CONTEXT["UserPromptExpansion: stage-context\ntask 快照（status / stage / subtasks）"]:::hookNote
+    DO_INSPECT["Script: do inspect\n读取当前状态快照"]:::stageBox
+    DO_EXISTS{"task.json 存在?"}:::decisionBox
 
-        DO_PREFLIGHT --> DO_CONTEXT --> DO_INSPECT --> DO_EXISTS
+    DO_PREFLIGHT -->|检查不通过| DO_BLOCK["阻断，提示原因"]:::stopBox
+    DO_PREFLIGHT -->|通过| DO_CONTEXT --> DO_INSPECT --> DO_EXISTS
 
+    subgraph PHASE_MAT["物化区"]
         MATERIALIZER(("agent: task-materializer\n读 plan.md → 分解 subtasks")):::agentBox
         MAT_HOOK["SubagentStop ①\ndo-agent-chain: 解析 result 字段\n注入下一步提示"]:::hookNote
         MAT_RESULT{"result?"}:::decisionBox
-        MAT_CONFIRM{"用户确认?"}:::decisionBox
         MATERIALIZE_WRITE["Script: do materialize\n写入 task.json\n（status: active, stage: executing）"]:::stateWrite
-        BACK_TO_PLAN["→ /plan"]:::backBox
+        TAKEOVER{"有适合外部高阶接管?"}:::decisionBox
 
-        DO_EXISTS -->|否| MATERIALIZER --> MAT_HOOK --> MAT_RESULT
+        MATERIALIZER --> MAT_HOOK --> MAT_RESULT
         MAT_RESULT -->|ready| MATERIALIZE_WRITE
-        MAT_RESULT -->|coarse_ready| MAT_CONFIRM
-        MAT_CONFIRM -->|确认| MATERIALIZE_WRITE
-        MAT_CONFIRM -->|取消| BACK_TO_PLAN
-        MAT_RESULT -->|"needs_plan_update\nblocked"| BACK_TO_PLAN
+        MAT_RESULT -->|"needs_plan_update\nblocked"| MAT_BACK["停止"]:::stopBox
+        MATERIALIZE_WRITE --> TAKEOVER
+        TAKEOVER -->|有，用户选择| EXT_TAKEOVER["外部高阶接管\n（Workflow / TeamCreate 等）"]:::agentBox
+        EXT_UPDATE["Script: do update-task\n写入执行状态"]:::stateWrite
+        EXT_TAKEOVER --> EXT_UPDATE
+        TAKEOVER -->|无 / 用户选原生| LOOP_ENTRY["进入执行循环"]:::stageBox
     end
 
-    subgraph PHASE_B["阶段 B — 执行循环"]
-        NEXT_TASK{"还有 pending subtask?"}:::decisionBox
+    subgraph PHASE_LOOP["执行循环区"]
+        NEXT_TASK{"还有 in_progress\n或 pending subtask?"}:::decisionBox
         EXECUTOR(("agent: executor\n执行当前 subtask")):::agentBox
         EXEC_HOOK["SubagentStop ②\ndo-agent-chain: 解析 result 字段\n注入下一步提示"]:::hookNote
         EXEC_RESULT{"executor result?"}:::decisionBox
-
-        MATERIALIZE_WRITE --> NEXT_TASK
-        DO_EXISTS -->|是| NEXT_TASK
-        NEXT_TASK -->|是| EXECUTOR
-        EXECUTOR --> EXEC_HOOK --> EXEC_RESULT
-    end
-
-    subgraph PHASE_C["阶段 C — 审核与调试"]
         TASK_REVIEW(("agent: verifier (task_review)\n审核单个 subtask 执行结果")):::agentBox
         REVIEW_HOOK["SubagentStop ③\ndo-agent-chain: 解析 result 字段\n注入下一步提示"]:::hookNote
         REVIEW_RESULT{"verifier result?"}:::decisionBox
-        DEBUGGER(("agent: debugger\n定位根因 / 提出修复方案")):::agentBox
-        DEBUG_HOOK["SubagentStop ④\ndo-agent-chain: 解析 result 字段\n注入下一步提示"]:::hookNote
-        DEBUG_RESULT{"debugger result?"}:::decisionBox
-
-        EXEC_RESULT -->|completed| TASK_REVIEW
-        EXEC_RESULT -->|"failed\nblocked"| UPDATE_FAIL
-
-        TASK_REVIEW --> REVIEW_HOOK --> REVIEW_RESULT
-        REVIEW_RESULT -->|passed| UPDATE_PASS
-        REVIEW_RESULT -->|needs_fix| DEBUGGER
-        REVIEW_RESULT -->|blocked| UPDATE_BLOCKED
-
-        DEBUGGER --> DEBUG_HOOK --> DEBUG_RESULT
-        DEBUG_RESULT -->|fixed| TASK_REVIEW
-        DEBUG_RESULT -->|suggested_fix| EXECUTOR
-        DEBUG_RESULT -->|blocked| UPDATE_BLOCKED
 
         UPDATE_PASS["Script: do update-task\nstatus: completed"]:::stateWrite
         UPDATE_FAIL["Script: do update-task\nstatus: failed / blocked"]:::stateWrite
         UPDATE_BLOCKED["Script: do update-task\nstatus: blocked"]:::stateWrite
+        UPDATE_SKIP["Script: do update-task\nstatus: skipped"]:::stateWrite
+        DO_STOP["停止执行"]:::stopBox
 
+        NEXT_TASK -->|是| EXECUTOR
+        EXECUTOR --> EXEC_HOOK --> EXEC_RESULT
+        EXEC_RESULT -->|completed| TASK_REVIEW
+        EXEC_RESULT -->|"failed\nblocked"| UPDATE_FAIL
+        EXEC_RESULT -->|skipped\n（用户明确确认）| UPDATE_SKIP
+        TASK_REVIEW --> REVIEW_HOOK --> REVIEW_RESULT
+        REVIEW_RESULT -->|passed| UPDATE_PASS
+        REVIEW_RESULT -->|needs_fix| EXECUTOR
+        REVIEW_RESULT -->|blocked| UPDATE_BLOCKED
         UPDATE_PASS --> NEXT_TASK
-        UPDATE_FAIL --> DO_STOP["停止执行\n→ /plan"]:::backBox
+        UPDATE_SKIP --> NEXT_TASK
+        UPDATE_FAIL --> DO_STOP
         UPDATE_BLOCKED --> DO_STOP
     end
 
-    NEXT_TASK -->|否，全部完成| TO_VERIFY["→ 进入 /verify 阶段"]:::routeBox
+    DO_EXISTS -->|否| MATERIALIZER
+    DO_EXISTS -->|是| NEXT_TASK
+    LOOP_ENTRY --> NEXT_TASK
+    EXT_UPDATE --> TO_VERIFY["→ 进入 /verify 阶段"]:::routeBox
+    NEXT_TASK -->|否，全部 completed/skipped| TO_VERIFY
+    NEXT_TASK -->|只剩 blocked/failed| DO_STOP
 
-    style PHASE_A fill:#f0f7ff,stroke:#90caf9
-    style PHASE_B fill:#fff8f0,stroke:#ffcc80
-    style PHASE_C fill:#fff0f3,stroke:#ef9a9a
+    style PHASE_MAT fill:#f0f7ff,stroke:#90caf9
+    style PHASE_LOOP fill:#fff8f0,stroke:#ffcc80
 ```
 
 ---
@@ -170,21 +164,34 @@ flowchart LR
 flowchart LR
     classDef stageBox fill:#fff8f0,stroke:#e65100,stroke-width:2px
     classDef stateWrite fill:#ede7f6,stroke:#4527a0,stroke-width:2px,stroke-dasharray: 5 5
-    classDef agentBox fill:#e0f7fa,stroke:#00838f,stroke-width:2px
     classDef doneBox fill:#e0f2f1,stroke:#00695c,stroke-width:2px
     classDef backBox fill:#f1f8e9,stroke:#a5d6a7,stroke-width:1px,stroke-dasharray: 4 3
     classDef hookNote fill:#fffef5,stroke:#f9a825,stroke-width:1px,stroke-dasharray: 3 3,font-size:11px
     classDef decisionBox fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef stopBox fill:#fce4ec,stroke:#c62828,stroke-width:1px
 
-    VERIFY_PREFLIGHT["UserPromptExpansion ①\nstage-preflight: 检查 task.json 存在\n所有 subtask 完成 / 至少一个 completed\n无 unfinished subtask"]:::hookNote
-    VERIFY_CONTEXT["UserPromptExpansion ②\nstage-context: 注入 task 快照（含 subtask checks）\n+ review helpers"]:::hookNote
-    FINAL_VERIFY(("agent: verifier (mode: final_verify)\n对比 plan.md 目标与执行结果\n产出 result + summary [+ repairTasks]")):::agentBox
+    VERIFY_PREFLIGHT["UserPromptExpansion: stage-preflight\ntask.json 存在\nsubtask 全完成 / 至少一个 completed"]:::hookNote
+    VERIFY_CONTEXT["UserPromptExpansion: stage-context\ntask 快照（projectSummary / objective /\n subtask checks）"]:::hookNote
+    VERIFY_PLAN["制定全量验证计划\n（静态检查 → 命令验证 → 浏览器验证等）\n按项目类型分组；通过 AskUserQuestion 确认"]:::stageBox
+    VERIFY_GROUP_LOOP["按分组顺序依次执行验证"]:::stageBox
+    GROUP_RESULT{"本组结果?"}:::decisionBox
+    APPEND_REPAIRS["Script: verify append-repairs\n立即追加 repair subtasks (R1, R2…)"]:::stateWrite
+    MORE_GROUPS{"还有下一组?"}:::decisionBox
+    CONCLUDE["基于全部证据形成结论\npassed / needs_fix / blocked"]:::stageBox
     VERIFY_RESULT{"result?"}:::decisionBox
 
-    VERIFY_PREFLIGHT --> VERIFY_CONTEXT --> FINAL_VERIFY --> VERIFY_RESULT
+    VERIFY_PREFLIGHT -->|检查不通过| VERIFY_BLOCK["阻断，提示原因"]:::stopBox
+    VERIFY_PREFLIGHT -->|通过| VERIFY_CONTEXT --> VERIFY_PLAN --> VERIFY_GROUP_LOOP
+    VERIFY_GROUP_LOOP --> GROUP_RESULT
+    GROUP_RESULT -->|发现问题| APPEND_REPAIRS --> MORE_GROUPS
+    GROUP_RESULT -->|无问题| MORE_GROUPS
+
+    MORE_GROUPS -->|是| VERIFY_GROUP_LOOP
+    MORE_GROUPS -->|否| CONCLUDE
+    CONCLUDE --> VERIFY_RESULT
 
     VERIFY_PASS["Script: verify complete\nstatus: passed\n→ task.status: verified, stage: verified"]:::doneBox
-    VERIFY_FIX["Script: verify complete\nstatus: needs_fix\n→ append repair tasks (R1, R2…)\ntask.status: active, stage: executing"]:::stateWrite
+    VERIFY_FIX["Script: verify complete\nstatus: needs_fix\n→ task.status: active, stage: executing\n（repair tasks 已由 append-repairs 写入）"]:::stateWrite
     VERIFY_BLOCKED_W["Script: verify complete\nstatus: blocked\n→ task.status: blocked, stage: verifying"]:::stateWrite
 
     VERIFY_RESULT -->|passed| VERIFY_PASS
@@ -193,7 +200,7 @@ flowchart LR
 
     VERIFY_PASS --> TO_ARCHIVE["→ 进入 /archive 阶段"]:::doneBox
     VERIFY_FIX --> BACK_TO_DO["→ /do（执行 repair tasks）"]:::backBox
-    VERIFY_BLOCKED_W --> BACK_TO_PLAN["→ /plan（重新规划）"]:::backBox
+    VERIFY_BLOCKED_W --> BACK_TO_PLAN["→ /plan（重新规划）\n或处理外部阻塞"]:::backBox
 
     style VERIFY_PASS fill:#e0f2f1,stroke:#00695c
     style VERIFY_FIX fill:#fff8e1,stroke:#f57f17
@@ -213,12 +220,14 @@ flowchart LR
     classDef backBox fill:#f1f8e9,stroke:#a5d6a7,stroke-width:1px,stroke-dasharray: 4 3
     classDef hookNote fill:#fffef5,stroke:#f9a825,stroke-width:1px,stroke-dasharray: 3 3,font-size:11px
     classDef decisionBox fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef stopBox fill:#fce4ec,stroke:#c62828,stroke-width:1px
 
-    ARCHIVE_PREFLIGHT["UserPromptExpansion\nstage-preflight: 检查 task.json 存在且 taskId 一致\n归档目标目录不存在\nstage-context: 对 archive 静默，不注入"]:::hookNote
+    ARCHIVE_PREFLIGHT["UserPromptExpansion: stage-preflight\ntask.json 存在且 taskId 一致\n归档目标目录不存在"]:::hookNote
     ARCHIVE_READ["读取 task.json\n确认 verification.status 语义"]:::stageBox
     ARCHIVE_GATE{"verification.status = passed\n或用户明确确认关闭?"}:::decisionBox
 
-    ARCHIVE_PREFLIGHT --> ARCHIVE_READ --> ARCHIVE_GATE
+    ARCHIVE_PREFLIGHT -->|检查不通过| ARCHIVE_BLOCK["阻断，提示原因"]:::stopBox
+    ARCHIVE_PREFLIGHT -->|通过| ARCHIVE_READ --> ARCHIVE_GATE
 
     ARCHIVE_SUMMARY["生成 archive.summary\n（基于 objective + verification.summary + 状态）"]:::stageBox
     ARCHIVE_WRITE["Script: archive archive\n写入 archive.summary + archivedAt\n移动到 archived_tasks/taskId/"]:::stateWrite

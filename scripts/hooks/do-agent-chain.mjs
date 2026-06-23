@@ -154,7 +154,7 @@ function debuggerSignal(fields) {
 function taskMaterializerSignal(fields) {
   const result = normalizeValue(fields.result);
   if (result === "ready") {
-    return "task-materializer returned ready; call scripts/run.mjs do materialize passing only objective and tasks[] — do not pass result, shouldStopAfterMaterialize, or reason.";
+    return "task-materializer returned ready; call scripts/run.mjs do materialize passing only objective and subtasks[] — do not pass result, shouldStopAfterMaterialize, or reason.";
   }
   if (result === "coarse_ready") {
     return "task-materializer returned coarse_ready; show reason and candidate breakdown to user for confirmation before calling materialize.";

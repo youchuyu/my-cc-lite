@@ -6,28 +6,20 @@ disable-model-invocation: true
 
 # Verify
 
-`/verify` 是 my-cc-lite 的任务级验收阶段。它判断当前 active task 是否满足 `plan.md` 的目标、范围和验收口径，并通过 my-cc-lite runtime entry 把最终结论写回当前任务目录下的 `task.json`。
-
-`/verify` 不执行修复，不改写 `plan.md`，不改写已有 task、step 或 check，不更新 `project.json`，不自动归档任务。
-
-## 使用条件
-
-当用户手动调用 `/verify`，或明确要求验收当前 my-cc-lite 任务时使用。
-
-当前工作目录应是目标项目根目录。显式 `/verify` 的静态入口条件由 preflight hook 提前阻断。
+`/verify` 是 my-cc-lite 的任务级验收阶段。
 
 ## 执行步骤
 
-1. 根据 `my-cc-lite:verify Hooks注入状态` 判断哪些分组对当前项目类型有意义（web 应用优先浏览器验证，CLI 工具优先命令验证，library 优先测试命令），按验证逻辑从前往后自然分组（例如：静态检查 → 命令验证 → 浏览器验证），按 `reference/verification-plan.md` 的规则和格式形成全量验证计划草稿。
+1. 根据 `<Verify_Hooks_Context>` 中的内容设计验证分组，按验证逻辑从前往后自然分组（例如：静态检查 → 命令验证 → 浏览器验证），按 `reference/verification-plan.md` 的规则和格式形成全量验证计划草稿。此优先根据 `<Verify_Hooks_Context>` 制定验证计划，不要读取 .my-cc-lite/tasks/ 下的内容。
 
-2. 通过 `AskUserQuestion` 向用户展示验证计划，询问是否需要补充；若缺少必要参数（如 dev server 启动命令、目标代理 URL 等），在此阶段一并与用户确认，计划定稿后再继续执行。
+2. 向用户展示验证计划，并通过 `AskUserQuestion` 询问是否需要补充；若缺少必要参数（如 dev server 启动命令、目标代理 URL 等），在此阶段一并与用户确认，计划定稿后再继续执行。
 
 3. 按步骤 1 确定的分组顺序依次执行。每组完成后：
    - 若发现需要修复的 checks，立即按修复入口整理 repair subtasks，调用 `append-repairs` 脚本写入 task.json，再进入下一组。
    - 若遇到真正的环境性障碍无法继续，停止执行，直接进入步骤 4 形成 `blocked` 结论；之前各组已写入的 repair subtasks 保留在 task.json 中。
    - 若当组无问题，直接进入下一组。
 
-4. 仅当 hooks 注入失败或 `checks[]` 字段为空时，才读取 `plan.md` 作为补充；正常注入流程下跳过，不主动读取。
+4. 仅当 hooks 注入失败或 `checks[]` 字段为空时，才读取 `plan.md` 或者 `task.json` 作为补充；正常注入流程下跳过，不主动读取。
 
 5. 全部分组执行完成后，基于所有证据一次性形成判断，在 `passed`、`needs_fix`、`blocked` 中选择一个结论。
 
@@ -39,7 +31,7 @@ disable-model-invocation: true
 
 ## 判断依据
 
-- `subtasks[].checks[]` 是首要验收标准；`objective` 是目标快照。判断基于进入 verify 时目标项目的代码状态；verify 执行过程中发现的代码问题应体现在结论（`needs_fix` 或 `blocked`）中，不得当场修复后以修复后状态形成 `passed` 结论。
+- `<Verify_Hooks_Context>` 中的 `subtasks[].checks[]` 是首要验收标准；`objective` 是目标快照。判断基于进入 verify 时目标项目的代码状态；verify 执行过程中发现的代码问题应体现在结论（`needs_fix` 或 `blocked`）中，不得当场修复后以修复后状态形成 `passed` 结论。
 - `plan.md` 仅在 hooks 注入失败或 `checks[]` 字段为空时作为兜底补充，正常流程不主动读取。`checks[]` 本身来源于 `plan.md`，若两者不一致说明注入环节有问题，应在 `summary` 中说明，不自动以 `plan.md` 覆盖。
 - 项目文件、命令输出或用户补充说明只作为本轮判断的支撑证据，不落盘。
 
@@ -115,8 +107,8 @@ node scripts/run.mjs verify append-repairs
   "repairTasks": [
     {
       "title": "Bounded repair subtask title",
-      "steps": ["Bounded repair step"],
-      "checks": ["Check tied to the original plan.md acceptance criteria"]
+      "steps": ["..."],
+      "checks": ["..."]
     }
   ]
 }
